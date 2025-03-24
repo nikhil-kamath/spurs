@@ -1,0 +1,27 @@
+(lang dune 3.17)
+
+(name sprs)
+
+(generate_opam_files true)
+
+(source
+ (github nikhil-kamath/sprs))
+
+(authors "Nikhil Kamath <nikhil.k123234@gmail.com>")
+
+(maintainers "Nikhil Kamath <nikhil.k123234@gmail.com")
+
+(license LICENSE)
+
+(documentation https://url/to/documentation)
+
+(package
+ (name sprs)
+ (synopsis "A lightweight native sparse matrix library")
+ (depends
+  ocaml
+  (alcotest :with-test))
+ (tags
+  ("add topics" "to describe" your project)))
+
+; See the complete stanza docs at https://dune.readthedocs.io/en/stable/reference/dune-project/index.html

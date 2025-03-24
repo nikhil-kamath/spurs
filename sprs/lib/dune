@@ -1,0 +1,5 @@
+(library
+ (public_name sprs)
+ (name sprs)
+ (preprocess
+  (pps ppx_deriving.show ppx_fields_conv)))

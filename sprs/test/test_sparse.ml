@@ -8,8 +8,7 @@ let test_valid_1 () =
   let indptr = [| 0; 2; 2; 4; 5 |] in
   let outer = 4 in
   let inner = 5 in
-  check "Valid Sparse matrix 1" (ok ())
-    (check_compressed_structure inner outer indptr indices)
+  check "Valid Sparse matrix 1" (ok ()) (check_compressed_structure inner outer indptr indices)
 
 let test_valid_2 () =
   let indices =
@@ -112,8 +111,7 @@ let test_valid_2 () =
   in
   let outer = 25 in
   let inner = 15 in
-  check "Valid Sparse matrix 2" (ok ())
-    (check_compressed_structure inner outer indptr indices)
+  check "Valid Sparse matrix 2" (ok ()) (check_compressed_structure inner outer indptr indices)
 
 let test_invalid_indptr_length () =
   let indices = [| 2; 4; 0; 3; 1 |] in
@@ -146,8 +144,7 @@ let test_invalid_unsorted_indices () =
   let indptr = [| 0; 2; 2; 4; 5 |] in
   let outer = 4 in
   let inner = 5 in
-  check "Should error with unsorted indices"
-    (error "Indices are not sorted")
+  check "Should error with unsorted indices" (error "Indices are not sorted")
     (check_compressed_structure inner outer indptr indices)
 
 let test_invalid_index_oob () =

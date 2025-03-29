@@ -1,3 +1,4 @@
+open Sprs
 open Sprs.Sparse
 open Sprs.Csmat
 open Alcotest
@@ -101,6 +102,51 @@ let test_invalid_csc_indptr_length () =
     (Result.error "Indptr length does not match dimension")
     m
 
+let test_csr_unsorted_indices () =
+  let indptr = [| 0; 3; 3; 5; 6; 7 |] in
+  let indices_sorted = [| 1; 2; 3; 2; 3; 4; 4 |] in
+  let indices_shuffled = [| 1; 3; 2; 2; 3; 4; 4 |] in
+  let data = [| 0; 1; 2; 3; 4; 5; 6 |] in
+  let m = new_csr_from_unsorted (5, 5) indptr indices_shuffled (Array.copy data) in
+  check bool "Should be valid" true (Result.is_ok m);
+  let m = Result.get_ok m in
+  check (array int) "Should have sorted indices" indices_sorted m.indices;
+  Array_utils.swap data 1 2;
+  check (array int) "Should have rearranged data" data m.data
+
+let test_csr_with_empty_row () =
+  let indptr = [| 0; 3; 3; 5; 6; 7 |] in
+  let indices = [| 1; 2; 3; 2; 3; 4; 4 |] in
+  let data = [| 0.7; 0.1; 0.3; 0.1; 0.6; 0.3; 0.5 |] in
+  let m = try_new_csr (5, 5) indptr indices data in
+  check bool "Should be valid" true (Result.is_ok m)
+
+let test_csr_to_csc () =
+  let indptr_csr = [| 0; 2; 4; 5; 6; 7 |] in
+  let indices_csr = [| 2; 3; 3; 4; 2; 1; 3 |] in
+  let data_csr = [| 3; 4; 2; 5; 5; 8; 7 |] in
+  let indptr_csc = [| 0; 0; 1; 3; 6; 7 |] in
+  let indices_csc = [| 3; 0; 2; 0; 1; 4; 1 |] in
+  let data_csc = [| 8; 3; 5; 4; 2; 7; 5 |] in
+  let csr = new_csr (5, 5) indptr_csr indices_csr data_csr in
+  let csc_truth = new_csc (5, 5) indptr_csc indices_csc data_csc in
+  let csc = to_other_storage csr in
+  let csr_again = to_other_storage csc in
+  check cs_mat_base "Should be equal" csc csc_truth;
+  check cs_mat_base "Should be equal" csr csr_again
+
+let test_csr_to_csc_2 () =
+  let indptr_csr = [| 0; 2; 4; 7; 9; 12 |] in
+  let indices_csr = [| 0; 4; 1; 5; 0; 2; 6; 3; 5; 1; 4; 6 |] in
+  let data_csr = [| 1; 2; 3; 4; 5; 6; 7; 8; 9; 10; 11; 12 |] in
+  let indptr_csc = [| 0; 2; 4; 5; 6; 8; 10; 12 |] in
+  let indices_csc = [| 0; 2; 1; 4; 2; 3; 0; 4; 1; 3; 2; 4 |] in
+  let data_csc = [| 1; 5; 3; 10; 6; 8; 2; 11; 4; 9; 7; 12 |] in
+  let csr = new_csr (5, 7) indptr_csr indices_csr data_csr in
+  let csc = new_csc (5, 7) indptr_csc indices_csc data_csc in
+  check cs_mat_base "Should be equal" csc (to_other_storage csr);
+  check cs_mat_base "Should be equal" csr (to_other_storage csc)
+
 let () =
   run "Sparse.Csmat"
     [
@@ -117,5 +163,9 @@ let () =
           test_case "Invalid wrongly ordered indices" `Quick test_invalid_indices_ordering;
           test_case "Valid csr/csc" `Quick test_new_csr_csc_success;
           test_case "Invalid dims for csc" `Quick test_invalid_csc_indptr_length;
+          test_case "Valid sorting indices" `Quick test_csr_unsorted_indices;
+          test_case "Valid empty row" `Quick test_csr_with_empty_row;
+          test_case "CSR <-> CSC conversion" `Quick test_csr_to_csc;
+          test_case "CSR <-> CSC conversion 2" `Quick test_csr_to_csc_2;
         ] );
     ]

@@ -117,14 +117,6 @@ module Cs_tri_base = struct
 end
 
 module Utils = struct
-  (* Check that indices is sorted from indexes [s, e) *)
-  let sorted_indices indices s e =
-    let r = ref true in
-    for i = s to e - 2 do
-      r := !r && indices.(i) < indices.(i + 1)
-    done;
-    !r
-
   (** Check the structure of `CsMat` components, ensuring:
       - indptr is of length `outer_dim() + 1`
       - indices and data have the same length, `nnz == indptr[outer_dims()]`
@@ -151,8 +143,10 @@ module Utils = struct
       else ok ()
     in
     let* () =
-      if Indptr.fold_outer indptr (fun s e a -> a && sorted_indices indices s e) true then
-        ok ()
+      if
+        Indptr.map_outer_list indptr (fun s e -> Array_utils.is_sorted_from indices s e)
+        |> List.for_all (fun x -> x)
+      then ok ()
       else error "Indices are not sorted"
     in
     let* () =

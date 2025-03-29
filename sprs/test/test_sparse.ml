@@ -169,10 +169,8 @@ let () =
           test_case "Valid 25x15" `Quick test_valid_2;
           test_case "Invalid indptr length" `Quick test_invalid_indptr_length;
           test_case "Invalid negative index" `Quick test_invalid_negative_index;
-          test_case "Invalid index mismatch" `Quick
-            test_invalid_mismatch_indices_indptr;
-          test_case "Invalid unsorted indices" `Quick
-            test_invalid_unsorted_indices;
+          test_case "Invalid index mismatch" `Quick test_invalid_mismatch_indices_indptr;
+          test_case "Invalid unsorted indices" `Quick test_invalid_unsorted_indices;
           test_case "Invalid index out of bounds" `Quick test_invalid_index_oob;
         ] );
     ]

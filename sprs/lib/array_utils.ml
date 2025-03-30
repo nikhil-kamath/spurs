@@ -66,3 +66,22 @@ let cumsum arr =
     sum := !sum + arr.(i);
     set arr i !sum
   done
+
+(* Returns the transpose of a matrix *)
+let transpose matrix =
+  let rows = length matrix in
+  let cols = if rows = 0 then 0 else length matrix.(0) in
+  init cols (fun j -> init rows (fun i -> matrix.(i).(j)))
+
+(* Returns the identity of nxn *)
+let eye n = init_matrix n n (fun i j -> if i = j then 1. else 0.)
+
+(* Returns the range [start, stop) *)
+let range ?(start = 0) stop =
+  let len = stop - start in
+  init len (fun i -> i + start)
+
+let print_float_array arr =
+  Printf.printf "[|";
+  Array.iter (fun x -> Printf.printf " %.2f;" x) arr;
+  Printf.printf " |]\n"

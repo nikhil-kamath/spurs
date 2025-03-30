@@ -28,9 +28,9 @@ type nnz_index = NNZ of int
 exception MatrixException of string
 
 (*
-  ==========================================
-  Functions to create new sparse matrices
-  ==========================================
+  ==========================================================
+  Functions to create new sparse matrices from various data
+  ==========================================================
 *)
 let new_checked storage shape indptr indices data =
   let nrows, ncols = shape in
@@ -85,15 +85,10 @@ let new_csr_from_unsorted shape = new_from_unsorted CSR shape
 (* Try to create a `CSC` matrix. If necessary, the indices will be sorted in place *)
 let new_csc_from_unsorted shape = new_from_unsorted CSC shape
 
-let print_int_array arr =
-  Format.printf "@[<1>[%a]@]@."
-    (Format.pp_print_list
-       ~pp_sep:(fun fmt () -> Format.fprintf fmt "; ")
-       Format.pp_print_int)
-    (Array.to_list arr)
-
-(* Create a matrix mathematically equal to this one, but with the opposed storage
-CSR -> CSC, CSC -> CSR*)
+(*
+  Create a matrix mathematically equal to this one, but with the opposed storage
+  CSR -> CSC, CSC -> CSR
+*)
 let to_other_storage m =
   let open Array in
   let indptr = make (inner_dims m + 1) 0 in
@@ -139,3 +134,84 @@ let to_other_storage m =
       indices;
       data;
     }
+
+(* Transposes a matrix in-place. Does not create a new matrix! *)
+let transpose_mut (m : 'a Cs_mat_base.t) =
+  m.storage <- other_storage m.storage;
+  let nrows, ncols = (m.nrows, m.ncols) in
+  m.nrows <- ncols;
+  m.ncols <- nrows
+
+(* Returns the transpose of this matrix, in the other format. *)
+let transpose (m : 'a Cs_mat_base.t) =
+  Cs_mat_base.
+    {
+      storage = other_storage m.storage;
+      nrows = m.ncols;
+      ncols = m.nrows;
+      indptr = Array.copy m.indptr;
+      indices = Array.copy m.indices;
+      data = Array.copy m.data;
+    }
+
+(* Create a CSR matrix from a dense matrix, ignoring elements lower than `epsilon` *)
+let csr_from_dense ?(epsilon = 0.00001) m =
+  let open Array in
+  let nrows = length m in
+  let ncols = length m.(0) in
+  let indptr = make (nrows + 1) 0 in
+  let nnz = ref 0 in
+  iteri
+    (fun i row ->
+      iter (fun x -> if abs_float x > epsilon then incr nnz) row;
+      set indptr (i + 1) !nnz)
+    m;
+  let indices = make !nnz 0 in
+  let data = make !nnz 0. in
+  let dest = ref 0 in
+  iter
+    (fun row ->
+      iteri
+        (fun col x ->
+          if abs_float x > epsilon then (
+            set indices !dest col;
+            set data !dest x;
+            incr dest))
+        row)
+    m;
+  Cs_mat_base.{ storage = CSR; nrows; ncols; indptr; indices; data }
+
+(* Create a CSC matrix from a dense matrix, ignoring elements less than `epsilon`*)
+let csc_from_dense ?(epsilon = 0.00001) m =
+  let sm = m |> Array_utils.transpose |> csr_from_dense ~epsilon in
+  transpose_mut sm;
+  sm
+
+(*
+ =================================
+ Common matrices in sparse formats
+ =================================
+*)
+
+(* Identity matrix, stored as a CSR *)
+let eye_csr n =
+  let indptr = Array_utils.range (n + 1) in
+  let indices = Array_utils.range n in
+  let data = Array.make n 1. in
+  Cs_mat_base.{ storage = CSR; nrows = n; ncols = n; indptr; indices; data }
+
+(* Identity matrix, stored as a CSC *)
+let eye_csc n =
+  let m = eye_csr n in
+  transpose_mut m;
+  m
+
+(* Create an empty matrix for building purposes *)
+let empty storage inner_size =
+  let shape = match storage with CSR -> (0, inner_size) | CSC -> (inner_size, 0) in
+  new_checked storage shape [| 0; 1 |] [||] [||]
+
+(* Create a new CSR matrix representing the zero matrix *)
+let zero shape =
+  let nrows, _ncols = shape in
+  new_checked CSR shape (Array.make (nrows + 1) 0) [||] [||]

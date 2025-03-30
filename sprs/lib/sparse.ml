@@ -53,9 +53,9 @@ module Cs_mat_base = struct
       in the triplet format can then be efficiently converted to a `CsMat`. *)
 
   type 'a t = {
-    storage : compressed_storage;
-    nrows : int;
-    ncols : int;
+    mutable storage : compressed_storage;
+    mutable nrows : int;
+    mutable ncols : int;
     indptr : int array;
     indices : int array;
     data : 'a array;

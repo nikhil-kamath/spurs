@@ -4,6 +4,10 @@ open Sprs.Csmat
 open Alcotest
 
 let cs_mat_base = testable (Fmt.of_to_string (Cs_mat_base.show Fmt.int)) (Cs_mat_base.equal ( = ))
+
+let cs_mat_base_float =
+  testable (Fmt.of_to_string (Cs_mat_base.show Fmt.float)) (Cs_mat_base.equal ( = ))
+
 let cs_mat_base_result = result cs_mat_base string
 
 let test_new_csr_success () =
@@ -132,7 +136,7 @@ let test_csr_to_csc () =
   let csc_truth = new_csc (5, 5) indptr_csc indices_csc data_csc in
   let csc = to_other_storage csr in
   let csr_again = to_other_storage csc in
-  check cs_mat_base "Should be equal" csc csc_truth;
+  check cs_mat_base "Should be equal" csc_truth csc;
   check cs_mat_base "Should be equal" csr csr_again
 
 let test_csr_to_csc_2 () =
@@ -146,6 +150,30 @@ let test_csr_to_csc_2 () =
   let csc = new_csc (5, 7) indptr_csc indices_csc data_csc in
   check cs_mat_base "Should be equal" csc (to_other_storage csr);
   check cs_mat_base "Should be equal" csr (to_other_storage csc)
+
+let test_csr_from_dense () =
+  let m = Array_utils.eye 3 in
+  let m_sparse = csr_from_dense m in
+  check cs_mat_base_float "Should be equal" (eye_csr 3) m_sparse;
+
+  let m = [| [| 1.; 0.; 2.; 1e-7; 1. |]; [| 0.; 0.; 0.; 1.; 0. |]; [| 3.; 0.; 1.; 0.; 0. |] |] in
+  let m_sparse = csr_from_dense m in
+  let m_expected =
+    new_csr (3, 5) [| 0; 3; 4; 6 |] [| 0; 2; 4; 3; 0; 2 |] [| 1.; 2.; 1.; 1.; 3.; 1. |]
+  in
+  check cs_mat_base_float "Should be equal" m_sparse m_expected
+
+let test_csc_from_dense () =
+  let m = Array_utils.eye 3 in
+  let m_sparse = csc_from_dense m in
+  check cs_mat_base_float "Should be equal" (eye_csc 3) m_sparse;
+
+  let m = [| [| 1.; 0.; 2.; 1e-7; 1. |]; [| 0.; 0.; 0.; 1.; 0. |]; [| 3.; 0.; 1.; 0.; 0. |] |] in
+  let m_sparse = csc_from_dense m in
+  let m_expected =
+    new_csc (3, 5) [| 0; 2; 2; 4; 5; 6 |] [| 0; 2; 0; 2; 1; 0 |] [| 1.; 3.; 2.; 1.; 1.; 1. |]
+  in
+  check cs_mat_base_float "Should be equal" m_expected m_sparse
 
 let () =
   run "Sparse.Csmat"
@@ -167,5 +195,7 @@ let () =
           test_case "Valid empty row" `Quick test_csr_with_empty_row;
           test_case "CSR <-> CSC conversion" `Quick test_csr_to_csc;
           test_case "CSR <-> CSC conversion 2" `Quick test_csr_to_csc_2;
+          test_case "CSR from dense" `Quick test_csr_from_dense;
+          test_case "CSC from dense" `Quick test_csc_from_dense;
         ] );
     ]

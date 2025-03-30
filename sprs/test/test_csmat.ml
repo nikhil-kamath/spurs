@@ -9,6 +9,8 @@ let cs_mat_base_float =
   testable (Fmt.of_to_string (Cs_mat_base.show Fmt.float)) (Cs_mat_base.equal ( = ))
 
 let cs_mat_base_result = result cs_mat_base string
+let nnz_index_testable = testable (Fmt.of_to_string Nnz_index.show) Nnz_index.equal
+let nnz_index_option = option nnz_index_testable
 
 let test_new_csr_success () =
   let indptr = [| 0; 1; 2; 3 |] in
@@ -175,6 +177,37 @@ let test_csc_from_dense () =
   in
   check cs_mat_base_float "Should be equal" m_expected m_sparse
 
+let test_scale () =
+  let m = scale (eye_csr 3) 2. in
+  let m_expected = new_csr (3, 3) [| 0; 1; 2; 3 |] [| 0; 1; 2 |] [| 2.; 2.; 2. |] in
+  check cs_mat_base_float "Should be equal" m_expected m
+
+let test_nnz_index () =
+  let m = eye_csr 11 in
+  check nnz_index_option "" None (nnz_index m 2 3);
+  check nnz_index_option "" None (nnz_index m 5 7);
+  check nnz_index_option "" None (nnz_index m 0 11);
+  check nnz_index_option "" (Some (NNZ 0)) (nnz_index m 0 0);
+  check nnz_index_option "" (Some (NNZ 7)) (nnz_index m 7 7);
+  check nnz_index_option "" (Some (NNZ 10)) (nnz_index m 10 10);
+
+  let index = nnz_index m 8 8 |> Option.get in
+  check (float 0.000001) "" 1. m.!(index);
+
+  m.!(index) <- 2.;
+  check (float 0.000001) "" 2. m.!(index)
+
+let test_index () =
+  let m = eye_csr 11 in
+  check (option (float 0.000001)) "" None m.@(2, 3);
+  check (option (float 0.000001)) "" None m.@(5, 7);
+  check (option (float 0.000001)) "" None m.@(0, 12);
+  check (option (float 0.000001)) "" (Some 1.) m.@(0, 0);
+  check (option (float 0.000001)) "" (Some 1.) m.@(3, 3);
+
+  m.@(8, 8) <- 2.;
+  check (option (float 0.000001)) "" (Some 2.) m.@(8, 8)
+
 let () =
   run "Sparse.Csmat"
     [
@@ -198,4 +231,10 @@ let () =
           test_case "CSR from dense" `Quick test_csr_from_dense;
           test_case "CSC from dense" `Quick test_csc_from_dense;
         ] );
+      ( "lookups",
+        [
+          test_case "NNZ lookups" `Quick test_nnz_index;
+          test_case "Row/col lookups" `Quick test_index;
+        ] );
+      ("operations", [ test_case "Scaling" `Quick test_scale ]);
     ]

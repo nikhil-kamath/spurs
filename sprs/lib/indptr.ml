@@ -38,3 +38,5 @@ let check_indptr_structure indptr =
   in
   let* () = if not (is_sorted indptr) then error "Indptr should be sorted" else ok () in
   ok ()
+
+let outer_inds_sz (indptr : int array) outer = (indptr.(outer), indptr.(outer + 1))

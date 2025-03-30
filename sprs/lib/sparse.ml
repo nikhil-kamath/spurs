@@ -1,7 +1,7 @@
 type compressed_storage = CSR | CSC [@@deriving show, eq]
 
 module Cs_mat_base = struct
-  (* Compressed matrix in the CSR or CSC format, with sorted indices.
+  (** Compressed matrix in the CSR or CSC format, with sorted indices.
 
       This sparse matrix format is the preferred format for performing
       arithmetic operations. Constructing a sparse matrix directly in this
@@ -68,10 +68,20 @@ module Cs_mat_base = struct
   let get_indptr m = m.indptr
   let get_indices m = m.indices
   let get_data m = m.data
+
+  let copy m =
+    {
+      storage = m.storage;
+      nrows = m.nrows;
+      ncols = m.ncols;
+      indptr = Array.copy m.indptr;
+      indices = Array.copy m.indices;
+      data = Array.copy m.data;
+    }
 end
 
 module Cs_vec_base = struct
-  (* A sparse vector, storing the indices of its non-zero data.
+  (** A sparse vector, storing the indices of its non-zero data.
 
       It contains a sorted `indices` array and a corresponding `data` array. *)
 
@@ -83,7 +93,7 @@ module Cs_vec_base = struct
 end
 
 module Cs_tri_base = struct
-  (* Sparse matrix in the triplet format.
+  (** Sparse matrix in the triplet format.
 
     Sparse matrices in the triplet format use three arrays of equal sizes
     (accessible through the methods [`row_inds`], [`col_inds`], [`data`]), the
@@ -100,6 +110,7 @@ module Cs_tri_base = struct
     are more efficient in the compressed format. A matrix in the triplet format
     can be converted to the compressed format using the functions [`to_csc`] and
     [`to_csr`]. *)
+
   type 'a t = {
     rows : int;
     cols : int;
@@ -116,12 +127,18 @@ module Cs_tri_base = struct
   let get_data m = m.data
 end
 
+module Nnz_index = struct
+  (** Can be used to later access a non-zero element of a compressed matrix in constant time *)
+  type t = NNZ of int [@@deriving show, eq]
+end
+
 module Utils = struct
   (** Check the structure of `CsMat` components, ensuring:
       - indptr is of length `outer_dim() + 1`
       - indices and data have the same length, `nnz == indptr[outer_dims()]`
       - indices is sorted for each outer slice
       - indices are lower than `inner_dims()` *)
+
   let check_compressed_structure (inner : int) (outer : int) (indptr : int array)
       (indices : int array) : (unit, string) Result.t =
     let open Result in

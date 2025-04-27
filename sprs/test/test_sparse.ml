@@ -3,9 +3,11 @@ open Result
 
 let check = Alcotest.(check Alcotest.(result unit string))
 
+let of_array = Dynarray.of_array
+
 let test_valid_1 () =
-  let indices = [| 2; 4; 0; 3; 1 |] in
-  let indptr = [| 0; 2; 2; 4; 5 |] in
+  let indices = ([| 2; 4; 0; 3; 1 |] |> of_array) in
+  let indptr = ([| 0; 2; 2; 4; 5 |] |> of_array) in
   let outer = 4 in
   let inner = 5 in
   check "Valid Sparse matrix 1" (ok ()) (check_compressed_structure inner outer indptr indices)
@@ -77,7 +79,7 @@ let test_valid_2 () =
       2;
       6;
       14;
-    |]
+    |] |> of_array
   in
   let indptr =
     [|
@@ -107,15 +109,15 @@ let test_valid_2 () =
       59;
       61;
       64;
-    |]
+    |] |> of_array
   in
   let outer = 25 in
   let inner = 15 in
   check "Valid Sparse matrix 2" (ok ()) (check_compressed_structure inner outer indptr indices)
 
 let test_invalid_indptr_length () =
-  let indices = [| 2; 4; 0; 3; 1 |] in
-  let indptr = [| 0; 2; 2; 4; 5 |] in
+  let indices = ([| 2; 4; 0; 3; 1 |] |> of_array) in
+  let indptr = ([| 0; 2; 2; 4; 5 |] |> of_array) in
   let outer = 3 in
   let inner = 5 in
   check "Should error with invalid indptr length"
@@ -123,16 +125,16 @@ let test_invalid_indptr_length () =
     (check_compressed_structure inner outer indptr indices)
 
 let test_invalid_negative_index () =
-  let indices = [| 2; 4; 0; -3; 1 |] in
-  let indptr = [| 0; 2; 2; 4; 5 |] in
+  let indices = ([| 2; 4; 0; -3; 1 |] |> of_array) in
+  let indptr = ([| 0; 2; 2; 4; 5 |] |> of_array) in
   let outer = 4 in
   let inner = 5 in
   check "Should error with negative index" (error "Negative index")
     (check_compressed_structure inner outer indptr indices)
 
 let test_invalid_mismatch_indices_indptr () =
-  let indices = [| 2; 4; 0; 3 |] in
-  let indptr = [| 0; 2; 2; 4; 5 |] in
+  let indices = ([| 2; 4; 0; 3 |] |> of_array) in
+  let indptr = ([| 0; 2; 2; 4; 5 |] |> of_array) in
   let outer = 4 in
   let inner = 5 in
   check "Should error with size mismatch"
@@ -140,16 +142,16 @@ let test_invalid_mismatch_indices_indptr () =
     (check_compressed_structure inner outer indptr indices)
 
 let test_invalid_unsorted_indices () =
-  let indices = [| 2; 3; 4; 1; 3 |] in
-  let indptr = [| 0; 2; 2; 4; 5 |] in
+  let indices = ([| 2; 3; 4; 1; 3 |] |> of_array) in
+  let indptr = ([| 0; 2; 2; 4; 5 |] |> of_array) in
   let outer = 4 in
   let inner = 5 in
   check "Should error with unsorted indices" (error "Indices are not sorted")
     (check_compressed_structure inner outer indptr indices)
 
 let test_invalid_index_oob () =
-  let indices = [| 2; 3; 0; 1; 5 |] in
-  let indptr = [| 0; 2; 2; 4; 5 |] in
+  let indices = ([| 2; 3; 0; 1; 5 |] |> of_array) in
+  let indptr = ([| 0; 2; 2; 4; 5 |] |> of_array) in
   let outer = 4 in
   let inner = 5 in
   check "Should error with index out of bounds"

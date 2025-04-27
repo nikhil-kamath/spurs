@@ -1,7 +1,22 @@
+module Dynarray = struct
+  include Dynarray
+
+  (* Add a generic pretty-printer for Dynarray.t *)
+  let pp pp_elem fmt arr =
+    Format.fprintf fmt "@[<1>[%a]@]"
+      (Format.pp_print_list pp_elem)
+      (to_list arr)
+
+  let ( .!() ) = get
+  let ( .!()<- ) = set
+
+end
+
+
 type compressed_storage = CSR | CSC [@@deriving show, eq]
 
 module Cs_mat_base = struct
-  (* Compressed matrix in the CSR or CSC format, with sorted indices.
+  (** Compressed matrix in the CSR or CSC format, with sorted indices.
 
       This sparse matrix format is the preferred format for performing
       arithmetic operations. Constructing a sparse matrix directly in this
@@ -56,10 +71,10 @@ module Cs_mat_base = struct
     mutable storage : compressed_storage;
     mutable nrows : int;
     mutable ncols : int;
-    indptr : int array;
-    indices : int array;
-    data : 'a array;
-  }
+    indptr : int Dynarray.t;
+    indices : int Dynarray.t;
+    data : 'a Dynarray.t;
+ }
   [@@deriving show, eq]
 
   let get_storage m = m.storage
@@ -68,14 +83,24 @@ module Cs_mat_base = struct
   let get_indptr m = m.indptr
   let get_indices m = m.indices
   let get_data m = m.data
+
+  let copy m =
+    {
+      storage = m.storage;
+      nrows = m.nrows;
+      ncols = m.ncols;
+      indptr = Dynarray.copy m.indptr;
+      indices = Dynarray.copy m.indices;
+      data = Dynarray.copy m.data;
+    }
 end
 
 module Cs_vec_base = struct
-  (* A sparse vector, storing the indices of its non-zero data.
+  (** A sparse vector, storing the indices of its non-zero data.
 
       It contains a sorted `indices` array and a corresponding `data` array. *)
 
-  type 'a t = { dim : int; indices : int array; data : 'a array } [@@deriving show, eq]
+  type 'a t = { dim : int; indices : int Dynarray.t; data : 'a Dynarray.t } [@@deriving show, eq]
 
   let get_dim v = v.dim
   let get_indices v = v.indices
@@ -83,7 +108,7 @@ module Cs_vec_base = struct
 end
 
 module Cs_tri_base = struct
-  (* Sparse matrix in the triplet format.
+  (** Sparse matrix in the triplet format.
 
     Sparse matrices in the triplet format use three arrays of equal sizes
     (accessible through the methods [`row_inds`], [`col_inds`], [`data`]), the
@@ -100,12 +125,13 @@ module Cs_tri_base = struct
     are more efficient in the compressed format. A matrix in the triplet format
     can be converted to the compressed format using the functions [`to_csc`] and
     [`to_csr`]. *)
+
   type 'a t = {
     rows : int;
     cols : int;
-    row_inds : int array;
-    col_inds : int array;
-    data : 'a array;
+    row_inds : int Dynarray.t;
+    col_inds : int Dynarray.t;
+    data : 'a Dynarray.t;
   }
   [@@deriving show, eq]
 
@@ -116,29 +142,35 @@ module Cs_tri_base = struct
   let get_data m = m.data
 end
 
+module Nnz_index = struct
+  (** Can be used to later access a non-zero element of a compressed matrix in constant time *)
+  type t = NNZ of int [@@deriving show, eq]
+end
+
 module Utils = struct
   (** Check the structure of `CsMat` components, ensuring:
       - indptr is of length `outer_dim() + 1`
       - indices and data have the same length, `nnz == indptr[outer_dims()]`
       - indices is sorted for each outer slice
       - indices are lower than `inner_dims()` *)
-  let check_compressed_structure (inner : int) (outer : int) (indptr : int array)
-      (indices : int array) : (unit, string) Result.t =
+
+  let check_compressed_structure (inner : int) (outer : int) (indptr : int Dynarray.t)
+      (indices : int Dynarray.t) : (unit, string) Result.t =
     let open Result in
     let ( let* ) = bind in
     let* () = Indptr.check_indptr_structure indptr in
     let* () =
-      if Array.length indptr <> outer + 1 then
+      if Dynarray.length indptr <> outer + 1 then
         error "Indptr length does not match dimension"
       else ok ()
     in
     let* () =
-      if Option.is_some (Array.find_opt (fun x -> x < 0) indices) then
+      if Option.is_some (Dynarray.find_opt (fun x -> x < 0) indices) then
         error "Negative index"
       else ok ()
     in
     let* () =
-      if Indptr.nnz indptr <> Array.length indices then
+      if Indptr.nnz indptr <> Dynarray.length indices then
         error "Indices length and indptr's nnz do not match"
       else ok ()
     in
@@ -150,7 +182,7 @@ module Utils = struct
       else error "Indices are not sorted"
     in
     let* () =
-      if not (Array.for_all (fun index -> index < inner) indices) then
+      if not (Dynarray.for_all (fun index -> index < inner) indices) then
         error "Index is larger than inner dimension"
       else ok ()
     in

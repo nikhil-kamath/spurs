@@ -19,9 +19,9 @@ let test_new_csr_success () =
   let m = try_new_csr (3, 3) indptr indices data in
   check bool "Should be valid CSR" true (Result.is_ok m);
   let m = Result.get_ok m in
-  check (array int) "Should contain same indptr" indptr (Cs_mat_base.get_indptr m);
-  check (array int) "Should contain same indices" indices (Cs_mat_base.get_indices m);
-  check (array int) "Should contain same data" data (Cs_mat_base.get_data m)
+  check (array int) "Should contain same indptr" indptr (Cs_mat_base.get_indptr m |> Dynarray.to_array);
+  check (array int) "Should contain same indices" indices (Cs_mat_base.get_indices m |> Dynarray.to_array);
+  check (array int) "Should contain same data" data (Cs_mat_base.get_data m |> Dynarray.to_array)
 
 let test_invalid_indptr_size () =
   let indptr_fail = [| 0; 1; 2 |] in
@@ -116,9 +116,9 @@ let test_csr_unsorted_indices () =
   let m = new_csr_from_unsorted (5, 5) indptr indices_shuffled (Array.copy data) in
   check bool "Should be valid" true (Result.is_ok m);
   let m = Result.get_ok m in
-  check (array int) "Should have sorted indices" indices_sorted m.indices;
-  Array_utils.swap data 1 2;
-  check (array int) "Should have rearranged data" data m.data
+  check (array int) "Should have sorted indices" indices_sorted (Dynarray.to_array m.indices);
+  Array_utils.swap_arr data 1 2;
+  check (array int) "Should have rearranged data" data (Dynarray.to_array m.data)
 
 let test_csr_with_empty_row () =
   let indptr = [| 0; 3; 3; 5; 6; 7 |] in
@@ -192,10 +192,10 @@ let test_nnz_index () =
   check nnz_index_option "" (Some (NNZ 10)) (nnz_index m 10 10);
 
   let index = nnz_index m 8 8 |> Option.get in
-  check (float 0.000001) "" 1. m.!(index);
+  check (float 0.000001) "" 1. m.!!(index);
 
-  m.!(index) <- 2.;
-  check (float 0.000001) "" 2. m.!(index)
+  m.!!(index) <- 2.;
+  check (float 0.000001) "" 2. m.!!(index)
 
 let test_index () =
   let m = eye_csr 11 in

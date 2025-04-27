@@ -42,6 +42,9 @@ let new_checked storage shape indptr indices data =
       error (Printf.sprintf "data and indices have different sizes")
     else ok ()
   in
+  let indptr = Dynarray.of_array indptr in
+  let indices = Dynarray.of_array indices in
+  let data = Dynarray.of_array data in
   let* () = Utils.check_compressed_structure inner outer indptr indices in
   ok Cs_mat_base.{ storage; nrows; ncols; indptr; indices; data }
 
@@ -73,6 +76,9 @@ let new_from_unsorted storage shape indptr indices data =
       error "data and indices have different sizes"
     else ok ()
   in
+  let indptr = Dynarray.of_array indptr in
+  let indices = Dynarray.of_array indices in
+  let data = Dynarray.of_array data in
   Indptr.iter_outer indptr (fun start stop ->
       if not (Array_utils.is_sorted_from indices start stop) then
         Array_utils.sort_like_from indices data start stop);
@@ -90,38 +96,38 @@ let new_csc_from_unsorted shape = new_from_unsorted CSC shape
   CSR -> CSC, CSC -> CSR
 *)
 let to_other_storage m =
-  let open Array in
+  let open Dynarray in
   let indptr = make (inner_dims m + 1) 0 in
   let indices = make (nnz m) 0 in
   let data = copy m.data in
   (* get outer dims*)
-  iter (fun inner -> indptr.(inner) <- indptr.(inner) + 1) m.indices;
+  iter (fun inner -> indptr.!(inner) <- indptr.!(inner) + 1) m.indices;
 
   (* get cumulative sum, starting at 0 *)
   let cumsum = ref 0 in
   iteri
     (fun i x ->
-      indptr.(i) <- !cumsum;
+      indptr.!(i) <- !cumsum;
       cumsum := !cumsum + x)
     indptr;
 
   (* iterate through data, using inner and outer dimensions to assign corresponding indices/data*)
   Indptr.iter_outeri m.indptr (fun outer start stop ->
       for i = start to stop - 1 do
-        let inner = m.indices.(i) in
-        let x = m.data.(i) in
-        let dest = indptr.(inner) in
-        indices.(dest) <- outer;
-        data.(dest) <- x;
+        let inner = m.indices.!(i) in
+        let x = m.data.!(i) in
+        let dest = indptr.!(inner) in
+        indices.!(dest) <- outer;
+        data.!(dest) <- x;
         (* increment each inner dimension's start temporarily *)
-        indptr.(inner) <- indptr.(inner) + 1
+        indptr.!(inner) <- indptr.!(inner) + 1
       done);
 
   (* undo the incrementing from the assignments *)
   let last = ref 0 in
-  Array.iteri
+  Dynarray.iteri
     (fun i x ->
-      indptr.(i) <- !last;
+      indptr.!(i) <- !last;
       last := x)
     indptr;
 
@@ -149,9 +155,9 @@ let transpose (m : 'a Cs_mat_base.t) =
       storage = other_storage m.storage;
       nrows = m.ncols;
       ncols = m.nrows;
-      indptr = Array.copy m.indptr;
-      indices = Array.copy m.indices;
-      data = Array.copy m.data;
+      indptr = Dynarray.copy m.indptr;
+      indices = Dynarray.copy m.indices;
+      data = Dynarray.copy m.data;
     }
 
 (** Create a CSR matrix from a dense matrix, ignoring elements lower than `epsilon` *)
@@ -159,23 +165,23 @@ let csr_from_dense ?(epsilon = 0.00001) m =
   let open Array in
   let nrows = length m in
   let ncols = length m.(0) in
-  let indptr = make (nrows + 1) 0 in
+  let indptr = Dynarray.make (nrows + 1) 0 in
   let nnz = ref 0 in
   iteri
     (fun i row ->
       iter (fun x -> if abs_float x > epsilon then incr nnz) row;
-      indptr.(i + 1) <- !nnz)
+      Dynarray.set indptr (i + 1) !nnz)
     m;
-  let indices = make !nnz 0 in
-  let data = make !nnz 0. in
+  let indices = Dynarray.make !nnz 0 in
+  let data = Dynarray.make !nnz 0. in
   let dest = ref 0 in
   iter
     (fun row ->
       iteri
         (fun col x ->
           if abs_float x > epsilon then (
-            indices.(!dest) <- col;
-            data.(!dest) <- x;
+            Dynarray.set indices !dest col;
+            Dynarray.set data !dest x;
             incr dest))
         row)
     m;
@@ -183,7 +189,7 @@ let csr_from_dense ?(epsilon = 0.00001) m =
 
 (** Create a CSC matrix from a dense matrix, ignoring elements less than `epsilon`*)
 let csc_from_dense ?(epsilon = 0.00001) m =
-  let sm = m |> Array_utils.transpose |> csr_from_dense ~epsilon in
+  let sm = m |> Array_utils.transpose_array |> csr_from_dense ~epsilon in
   transpose_mut sm;
   sm
 
@@ -199,7 +205,7 @@ let csc_from_dense ?(epsilon = 0.00001) m =
 let eye_csr n =
   let indptr = Array_utils.range (n + 1) in
   let indices = Array_utils.range n in
-  let data = Array.make n 1. in
+  let data = Dynarray.make n 1. in
   Cs_mat_base.{ storage = CSR; nrows = n; ncols = n; indptr; indices; data }
 
 (** Identity matrix, stored as a CSC *)
@@ -211,7 +217,10 @@ let eye_csc n =
 (** Create an empty matrix for building purposes *)
 let empty storage inner_size =
   let shape = match storage with CSR -> (0, inner_size) | CSC -> (inner_size, 0) in
-  new_checked storage shape [| 0; 1 |] [||] [||]
+  let indptr = [|0; 1|] in
+  let indices = [||] in
+  let data = [||] in
+  new_checked storage shape indptr indices data
 
 (** Create a new CSR matrix representing the zero matrix *)
 let zero shape =
@@ -227,7 +236,7 @@ let zero shape =
  *)
 
 (** Scale the values in a sparse matrix inplace *)
-let scale_inplace (m : float Cs_mat_base.t) c = Array.map_inplace (fun x -> x *. c) m.data
+let scale_inplace (m : float Cs_mat_base.t) c = Array_utils.map_inplace (fun x -> x *. c) m.data
 
 (** Return a new sparse matrix, scaled by c *)
 let scale (m : float Cs_mat_base.t) c =
@@ -252,9 +261,10 @@ let outer_view (m : 'a Cs_mat_base.t) outer =
     (* TODO: should we make the Array.subs reference copies? *)
     Some
       (Vec.new_trusted (inner_dims m)
-         (Array.sub m.indices start len)
-         (Array.sub m.data start len))
+         (Array_utils.sub m.indices start len)
+         (Array_utils.sub m.data start len))
 
+(** Tries to find the value at the given outer and inner indices. Returns None if not a valid indexing, otherwise returns its NNZ index *)
 let nnz_index_outer_inner m outer inner =
   let ( let* ) = Option.bind in
   if outer >= outer_dims m then None
@@ -273,10 +283,10 @@ let nnz_index (m : 'a Cs_mat_base.t) row col =
   | CSC -> nnz_index_outer_inner m col row
 
 (** Index a sparse matrix using an Nnz_index.t. Raises if out of bounds index *)
-let get_nnz (m : 'a Cs_mat_base.t) (Nnz_index.NNZ i) = m.data.(i)
+let get_nnz (m : 'a Cs_mat_base.t) (Nnz_index.NNZ i) = Dynarray.(m.data.!(i))
 
 (** Reassign an Nnz_index.t. Raises if out of bounds index *)
-let set_nnz (m : 'a Cs_mat_base.t) (Nnz_index.NNZ i) v = m.data.(i) <- v
+let set_nnz (m : 'a Cs_mat_base.t) (Nnz_index.NNZ i) v = Dynarray.(m.data.!(i) <- v)
 
 (** Index a sparse matrix using row and column. Same complexity as nnz_index *)
 let get m (row, col) =
@@ -291,7 +301,7 @@ let set m (row, col) v =
   set_nnz m i v;
   Some ()
 
-let ( .!() ) m i = get_nnz m i
-let ( .!()<- ) m i v = set_nnz m i v
+let ( .!!() ) m i = get_nnz m i
+let ( .!!()<- ) m i v = set_nnz m i v
 let ( .@() ) m rc = get m rc
 let ( .@()<- ) m rc v = set m rc v |> Option.get (* Should this return the option? *)

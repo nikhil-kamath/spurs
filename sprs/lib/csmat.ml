@@ -1,15 +1,20 @@
-(**
-Sparse matrices in the Compressed Sparse Row / Column format
-
-In the CSR format, a a matrix is a structure containing 3 vectors:
-`indptr, indices, and data`
-These vectors satisfy the following relation:
-`for i in [0, nrows]`
-`A(i, indices[indptr[i] .. indptr[i + 1]]) = data[indptr[i] .. indptr[i + 1]]`
-In the CSC format, the relation is
-`A(indices[indptr[i] .. indptr[i + 1]], i) = data[indptr[i] .. indptr[i + 1]]`
-*)
 open Sparse
+(** {1 Sparse Matrices in Compressed Sparse Row / Column Format}
+
+    In the CSR (Compressed Sparse Row) format, a matrix is represented by three vectors:
+    [`indptr`], [`indices`], and [`data`].
+
+    These vectors satisfy the following relation:
+    {[
+      for i in [0, nrows]:
+        A(i, indices[indptr[i] .. indptr[i + 1]]) = data[indptr[i] .. indptr[i + 1]]
+    ]}
+
+    In the CSC (Compressed Sparse Column) format, the relation becomes:
+    {[
+      for i in [0, ncols]:
+        A(indices[indptr[i] .. indptr[i + 1]], i) = data[indptr[i] .. indptr[i + 1]]
+    ]} *)
 
 let other_storage = function CSR -> CSC | CSC -> CSR
 
@@ -19,18 +24,18 @@ let inner_dims Cs_mat_base.{ storage; nrows; ncols; _ } =
 let outer_dims Cs_mat_base.{ storage; nrows; ncols; _ } =
   match storage with CSC -> ncols | CSR -> nrows
 
+let set_outer_dims (m : 'a Cs_mat_base.t) outer =
+  match m.storage with CSR -> m.nrows <- outer | CSC -> m.ncols <- outer
+
+let set_inner_dims (m : 'a Cs_mat_base.t) inner =
+  match m.storage with CSR -> m.ncols <- inner | CSC -> m.nrows <- inner
+
 let nnz Cs_mat_base.{ indptr; _ } = Indptr.nnz indptr
 
 (* Exception type *)
 exception MatrixException of string
 
-(**
-  ==========================================================
-
-  Functions to create new sparse matrices from various data
-
-  ==========================================================
-*)
+(** {1 Functions to Create New Sparse Matrices from Various Data} *)
 
 let new_checked storage shape indptr indices data =
   let nrows, ncols = shape in
@@ -51,21 +56,28 @@ let new_checked storage shape indptr indices data =
 let try_new_csr shape = new_checked CSR shape
 let try_new_csc shape = new_checked CSC shape
 
-(** Create a new `CSR` sparse matrix. See `new_csc` for the `CSC` equivalent *)
+(** Create a new CSR sparse matrix.
+
+    See {!new_csc} for the CSC equivalent. *)
 let new_csr shape indptr indices data =
   match try_new_csr shape indptr indices data with
   | Ok m -> m
   | Error s ->
       raise (MatrixException (Printf.sprintf "Could not create sparse matrix: %s" s))
 
-(** Create a new `CSC` sparse matrix. See `new_csr` for the `CSR` equivalent *)
+(** Create a new CSC sparse matrix.
+
+    See {!new_csr} for the CSR equivalent. *)
 let new_csc shape indptr indices data =
   match try_new_csc shape indptr indices data with
   | Ok m -> m
   | Error s ->
       raise (MatrixException (Printf.sprintf "Could not create sparse matrix: %s" s))
 
-(** Create a new matrix *)
+(** Create a new matrix.
+
+    Returns [Some matrix] if the inputs represent a valid sparse matrix, or [None] if the
+    inputs are invalid. *)
 let new_from_unsorted storage shape indptr indices data =
   let nrows, ncols = shape in
   let inner, outer = match storage with CSR -> (ncols, nrows) | CSC -> (nrows, ncols) in
@@ -85,16 +97,18 @@ let new_from_unsorted storage shape indptr indices data =
   let* () = Utils.check_compressed_structure inner outer indptr indices in
   ok Cs_mat_base.{ storage; nrows; ncols; indptr; indices; data }
 
-(** Try to create a `CSR` matrix. If necessary, the indices will be sorted in place *)
+(** Try to create a CSR matrix.
+
+    If necessary, the indices will be sorted. *)
 let new_csr_from_unsorted shape = new_from_unsorted CSR shape
 
-(** Try to create a `CSC` matrix. If necessary, the indices will be sorted in place *)
+(** Try to create a CSC matrix.
+
+    If necessary, the indices will be sorted. *)
 let new_csc_from_unsorted shape = new_from_unsorted CSC shape
 
-(**
-  Create a matrix mathematically equal to this one, but with the opposed storage
-  CSR -> CSC, CSC -> CSR
-*)
+(** Create a matrix mathematically equal to this one, but with the opposite storage: CSR →
+    CSC, or CSC → CSR. *)
 let to_other_storage m =
   let open Dynarray in
   let indptr = make (inner_dims m + 1) 0 in
@@ -141,14 +155,18 @@ let to_other_storage m =
       data;
     }
 
-(** Transposes a matrix in-place. Does not create a new matrix! *)
+(** Transpose a matrix in-place.
+
+    Does not create a new matrix! *)
 let transpose_mut (m : 'a Cs_mat_base.t) =
   m.storage <- other_storage m.storage;
   let nrows, ncols = (m.nrows, m.ncols) in
   m.nrows <- ncols;
   m.ncols <- nrows
 
-(** Returns the transpose of this matrix, in the other format. *)
+(** Return the transpose of this matrix, in the other format.
+
+    Does not modify the original matrix. *)
 let transpose (m : 'a Cs_mat_base.t) =
   Cs_mat_base.
     {
@@ -160,7 +178,7 @@ let transpose (m : 'a Cs_mat_base.t) =
       data = Dynarray.copy m.data;
     }
 
-(** Create a CSR matrix from a dense matrix, ignoring elements lower than `epsilon` *)
+(** Create a CSR matrix from a dense matrix, ignoring elements lower than [epsilon]. *)
 let csr_from_dense ?(epsilon = 0.00001) m =
   let open Array in
   let nrows = length m in
@@ -187,28 +205,22 @@ let csr_from_dense ?(epsilon = 0.00001) m =
     m;
   Cs_mat_base.{ storage = CSR; nrows; ncols; indptr; indices; data }
 
-(** Create a CSC matrix from a dense matrix, ignoring elements less than `epsilon`*)
+(** Create a CSC matrix from a dense matrix, ignoring elements less than [epsilon]. *)
 let csc_from_dense ?(epsilon = 0.00001) m =
   let sm = m |> Array_utils.transpose_array |> csr_from_dense ~epsilon in
   transpose_mut sm;
   sm
 
-(**
- =================================
+(** {1 Common Matrices in Sparse Formats} *)
 
- Common matrices in sparse formats
-
- =================================
-*)
-
-(** Identity matrix, stored as a CSR *)
+(** Identity matrix, stored as a CSR. *)
 let eye_csr n =
   let indptr = Array_utils.range (n + 1) in
   let indices = Array_utils.range n in
   let data = Dynarray.make n 1. in
   Cs_mat_base.{ storage = CSR; nrows = n; ncols = n; indptr; indices; data }
 
-(** Identity matrix, stored as a CSC *)
+(** Identity matrix, stored as a CSC. *)
 let eye_csc n =
   let m = eye_csr n in
   transpose_mut m;
@@ -217,26 +229,21 @@ let eye_csc n =
 (** Create an empty matrix for building purposes *)
 let empty storage inner_size =
   let shape = match storage with CSR -> (0, inner_size) | CSC -> (inner_size, 0) in
-  let indptr = [|0; 1|] in
+  let indptr = [| 0 |] in
   let indices = [||] in
   let data = [||] in
   new_checked storage shape indptr indices data
 
-(** Create a new CSR matrix representing the zero matrix *)
+(** Create a new CSR matrix representing the zero matrix. *)
 let zero shape =
   let nrows, _ncols = shape in
   new_checked CSR shape (Array.make (nrows + 1) 0) [||] [||]
 
-(**
- ===================
-
- Matrix Operations
-
- ===================
- *)
+(** {1 Matrix Operations} *)
 
 (** Scale the values in a sparse matrix inplace *)
-let scale_inplace (m : float Cs_mat_base.t) c = Array_utils.map_inplace (fun x -> x *. c) m.data
+let scale_inplace (m : float Cs_mat_base.t) c =
+  Array_utils.map_inplace (fun x -> x *. c) m.data
 
 (** Return a new sparse matrix, scaled by c *)
 let scale (m : float Cs_mat_base.t) c =
@@ -244,15 +251,9 @@ let scale (m : float Cs_mat_base.t) c =
   scale_inplace m2 c;
   m2
 
-(**
-  ====================
+(** {1 Indexing and lookups} *)
 
-  Indexing and lookups
-
-  ====================
-*)
-
-(** Returns the inner vector at outer index `outer` *)
+(** Return the inner vector at outer index [outer]. *)
 let outer_view (m : 'a Cs_mat_base.t) outer =
   if outer >= outer_dims m then None
   else
@@ -264,7 +265,10 @@ let outer_view (m : 'a Cs_mat_base.t) outer =
          (Array_utils.sub m.indices start len)
          (Array_utils.sub m.data start len))
 
-(** Tries to find the value at the given outer and inner indices. Returns None if not a valid indexing, otherwise returns its NNZ index *)
+(** Try to find the value at the given outer and inner indices.
+
+    Returns [None] if the indexing is invalid, otherwise returns [Some NNZ index]. *)
+
 let nnz_index_outer_inner m outer inner =
   let ( let* ) = Option.bind in
   if outer >= outer_dims m then None
@@ -274,27 +278,44 @@ let nnz_index_outer_inner m outer inner =
     let* (NNZ index) = Vec.nnz_index v inner in
     Some (Nnz_index.NNZ (index + offset))
 
-(** Find the non-zero index of the element specified by row and col.
- This search is logarithmic in the number of non-zeros in the corresponding
- outer slice. Once it is available, the `nnz_index` type allows retrieval with O(1) complexity *)
+(** Find the non-zero index of the element specified by row and column.
+
+    This search is logarithmic in the number of non-zeros in the corresponding outer
+    slice. Once available, the [`nnz_index`] type allows retrieval with O(1) complexity.
+
+    Returns [None] if the element is not found, otherwise returns [Some NNZ index]. *)
 let nnz_index (m : 'a Cs_mat_base.t) row col =
   match m.storage with
   | CSR -> nnz_index_outer_inner m row col
   | CSC -> nnz_index_outer_inner m col row
 
-(** Index a sparse matrix using an Nnz_index.t. Raises if out of bounds index *)
+(** Index a sparse matrix using an [Nnz_index.t].
+
+    Raises an exception if the index is out of bounds. *)
 let get_nnz (m : 'a Cs_mat_base.t) (Nnz_index.NNZ i) = Dynarray.(m.data.!(i))
 
-(** Reassign an Nnz_index.t. Raises if out of bounds index *)
+(** Reassign an [Nnz_index.t].
+
+    Raises an exception if the index is out of bounds. *)
 let set_nnz (m : 'a Cs_mat_base.t) (Nnz_index.NNZ i) v = Dynarray.(m.data.!(i) <- v)
 
-(** Index a sparse matrix using row and column. Same complexity as nnz_index *)
+(** Index a sparse matrix using row and column.
+
+    Has the same complexity as [nnz_index].
+
+    Returns [None] if the row and column are invalid, otherwise returns [Some value] at
+    that position. *)
 let get m (row, col) =
   let ( let* ) = Option.bind in
   let* i = nnz_index m row col in
   Some (get_nnz m i)
 
-(** Reassign an elem using row and column. Same complexity as nnz_index *)
+(** Reassign an element using row and column.
+
+    Has the same complexity as [nnz_index].
+
+    Returns [None] if the row and column are invalid, otherwise sets the value at that
+    position. *)
 let set m (row, col) v =
   let ( let* ) = Option.bind in
   let* i = nnz_index m row col in
@@ -305,3 +326,60 @@ let ( .!!() ) m i = get_nnz m i
 let ( .!!()<- ) m i v = set_nnz m i v
 let ( .@() ) m rc = get m rc
 let ( .@()<- ) m rc v = set m rc v |> Option.get (* Should this return the option? *)
+
+(** {1 Modifying and building matrices} *)
+
+(** Append an outer dimension to an existing matrix, extending the size of the outer
+    dimension by one.
+
+    Raises an exception if the vector to add does not have compatible dimension. *)
+let append_outer ?(epsilon = 0.000001) (m : 'a Cs_mat_base.t) (v : 'a array) =
+  if Array.length v <> inner_dims m then
+    raise (MatrixException "Trying to append improperly sized vector");
+  let nnz = ref (nnz m) in
+  Array.iteri
+    (fun i x ->
+      if abs_float x >= epsilon then (
+        Dynarray.add_last m.indices i;
+        Dynarray.add_last m.data x;
+        incr nnz))
+    v;
+  Dynarray.add_last m.indptr !nnz;
+  match m.storage with CSR -> m.nrows <- m.nrows + 1 | CSC -> m.ncols <- m.ncols + 1
+
+(** Insert an element in the matrix. If the element is already present, its value is
+    overwritten.
+
+    This is not an efficient operation.
+    {b However, it is efficient if the elements are inserted in order} according to the
+    formatting (for example, row-by-row for CSR matrices)
+
+    {i If the index is out of bounds, the matrix will be resized to the necessary size.}
+*)
+
+let insert_outer_inner m outer inner x =
+  let open Dynarray in
+  let outer_dims = outer_dims m in
+  (if outer >= outer_dims then (
+     (* adding enough new outer dimensions *)
+     let last_nnz = if length m.indptr > 0 then get_last m.indptr else 0 in
+     append_array m.indptr (Array.make (outer - outer_dims) last_nnz);
+     set_outer_dims m (outer + 1);
+     add_last m.indptr (last_nnz + 1);
+     add_last m.indices inner;
+     add_last m.data x)
+   else
+     (* search for an insertion spot *)
+     let start, stop = Indptr.outer_inds_sz m.indptr outer in
+     match Array_utils.binary_search_from m.indices start stop inner with
+     | Ok ind -> m.data.!(ind) <- x
+     | Error ind ->
+         Array_utils.insert m.indices ind inner;
+         Array_utils.insert m.data ind x;
+         Indptr.record_new_element m.indptr outer);
+  if inner > inner_dims m then set_inner_dims m (inner + 1)
+
+let insert (m : 'a Cs_mat_base.t) row col x =
+  match m.storage with
+  | CSR -> insert_outer_inner m row col x
+  | CSC -> insert_outer_inner m col row x

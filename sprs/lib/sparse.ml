@@ -3,69 +3,65 @@ module Dynarray = struct
 
   (* Add a generic pretty-printer for Dynarray.t *)
   let pp pp_elem fmt arr =
-    Format.fprintf fmt "@[<1>[%a]@]"
-      (Format.pp_print_list pp_elem)
-      (to_list arr)
+    let lst = to_list arr in
+    if lst = [] then Format.fprintf fmt "@[<hov 2>[@]@]"
+    else
+      Format.fprintf fmt "@[<hov 2>[%a]@]"
+        (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ",@ ") pp_elem)
+        lst
 
   let ( .!() ) = get
   let ( .!()<- ) = set
-
 end
-
 
 type compressed_storage = CSR | CSC [@@deriving show, eq]
 
 module Cs_mat_base = struct
   (** Compressed matrix in the CSR or CSC format, with sorted indices.
 
-      This sparse matrix format is the preferred format for performing
-      arithmetic operations. Constructing a sparse matrix directly in this
-      format requires knowledge of its internals. For easier matrix
-      construction, use the triplet format.
+      This sparse matrix format is the preferred format for performing arithmetic
+      operations. Constructing a sparse matrix directly in this format requires knowledge
+      of its internals. For easier matrix construction, use the triplet format.
 
-      The `cs_mat_base` type is parameterized by the scalar type `'a` of its
-      data.
+      The `cs_mat_base` type is parameterized by the scalar type `'a` of its data.
 
       Unlike the rust library, all underlying data structures are arrays in this
       implementation.
 
       ## Storage format
 
-      In the compressed storage format, the non-zero values of a sparse matrix
-      are stored as the row and column location of the non-zero values, with a
-      compression along the rows (CSR) or columns (CSC) indices. The dimension
-      along which the storage is compressed is referred to as the *outer
-      dimension*, the other dimension is called the *inner dimension*. For
-      clarity, the remaining explanation will assume a CSR matrix, but the
-      information stands for CSC matrices as well.
+      In the compressed storage format, the non-zero values of a sparse matrix are stored
+      as the row and column location of the non-zero values, with a compression along the
+      rows (CSR) or columns (CSC) indices. The dimension along which the storage is
+      compressed is referred to as the *outer dimension*, the other dimension is called
+      the *inner dimension*. For clarity, the remaining explanation will assume a CSR
+      matrix, but the information stands for CSC matrices as well.
 
       ### Indptr
 
-      An index pointer array `indptr` of size corresponding to the number of
-      rows stores the cumulative sum of non-zero elements for each row. For
-      instance, the number of non-zero elements of the i-th row can be obtained
-      by computing `indptr[i + 1] - indptr[i]`. The total number of non-zero
-      elements is thus `nnz = indptr[nrows]`. This index pointer array can then
-      be used to efficiently index the `indices` and `data` array, which
-      respectively contain the column indices and the values of the non-zero
-      elements.
+      An index pointer array `indptr` of size corresponding to the number of rows stores
+      the cumulative sum of non-zero elements for each row. For instance, the number of
+      non-zero elements of the i-th row can be obtained by computing `indptr[i + 1] -
+      indptr[i]`. The total number of non-zero elements is thus `nnz = indptr[nrows]`.
+      This index pointer array can then be used to efficiently index the `indices` and
+      `data` array, which respectively contain the column indices and the values of the
+      non-zero elements.
 
       ### Indices and data
 
-      The non-zero locations and values are stored in arrays of size `nnz`,
-      `indices` and `data`. For row `i`, the non-zeros are located in the slices
-      `indices[indptr[i]..indptr[i+1]]` and `data[indptr[i]..indptr[i+1]]`. We
-      require and enforce sorted indices for each row.
+      The non-zero locations and values are stored in arrays of size `nnz`, `indices` and
+      `data`. For row `i`, the non-zeros are located in the slices
+      `indices[indptr[i]..indptr[i+1]]` and `data[indptr[i]..indptr[i+1]]`. We require and
+      enforce sorted indices for each row.
 
       ## Construction
 
-      A sparse matrix can be directly constructed by providing its index
-      pointer, indices and data arrays. The coherence of the provided structure
-      is then verified.
+      A sparse matrix can be directly constructed by providing its index pointer, indices
+      and data arrays. The coherence of the provided structure is then verified.
 
-      For situations where the compressed structure is hard to figure out up
-      front, the [triplet format](struct.TriMatBase.html) can be used. A matrix
-      in the triplet format can then be efficiently converted to a `CsMat`. *)
+      For situations where the compressed structure is hard to figure out up front, the
+      [triplet format](struct.TriMatBase.html) can be used. A matrix in the triplet format
+      can then be efficiently converted to a `CsMat`. *)
 
   type 'a t = {
     mutable storage : compressed_storage;
@@ -74,7 +70,7 @@ module Cs_mat_base = struct
     indptr : int Dynarray.t;
     indices : int Dynarray.t;
     data : 'a Dynarray.t;
- }
+  }
   [@@deriving show, eq]
 
   let get_storage m = m.storage
@@ -93,6 +89,9 @@ module Cs_mat_base = struct
       indices = Dynarray.copy m.indices;
       data = Dynarray.copy m.data;
     }
+
+  let print_float_matrix m = show Fmt.float m |> print_endline
+  let print_int_matrix m = show Fmt.int m |> print_endline
 end
 
 module Cs_vec_base = struct
@@ -100,7 +99,8 @@ module Cs_vec_base = struct
 
       It contains a sorted `indices` array and a corresponding `data` array. *)
 
-  type 'a t = { dim : int; indices : int Dynarray.t; data : 'a Dynarray.t } [@@deriving show, eq]
+  type 'a t = { dim : int; indices : int Dynarray.t; data : 'a Dynarray.t }
+  [@@deriving show, eq]
 
   let get_dim v = v.dim
   let get_indices v = v.indices
@@ -110,21 +110,20 @@ end
 module Cs_tri_base = struct
   (** Sparse matrix in the triplet format.
 
-    Sparse matrices in the triplet format use three arrays of equal sizes
-    (accessible through the methods [`row_inds`], [`col_inds`], [`data`]), the
-    first one storing the row indices of non-zero values, the second storing the
-    corresponding column indices and the last array storing the corresponding
-    scalar value. If a non-zero location is repeated in the arrays, the non-zero
-    value is taken as the sum of the corresponding scalar entries.
+      Sparse matrices in the triplet format use three arrays of equal sizes (accessible
+      through the methods [`row_inds`], [`col_inds`], [`data`]), the first one storing the
+      row indices of non-zero values, the second storing the corresponding column indices
+      and the last array storing the corresponding scalar value. If a non-zero location is
+      repeated in the arrays, the non-zero value is taken as the sum of the corresponding
+      scalar entries.
 
-    This format is useful for iteratively building a sparse matrix, since the
-    various non-zero entries can be specified in any order, or even partially as
-    is common in physics with partial derivatives equations.
+      This format is useful for iteratively building a sparse matrix, since the various
+      non-zero entries can be specified in any order, or even partially as is common in
+      physics with partial derivatives equations.
 
-    This format cannot be used for arithmetic operations. Arithmetic operations
-    are more efficient in the compressed format. A matrix in the triplet format
-    can be converted to the compressed format using the functions [`to_csc`] and
-    [`to_csr`]. *)
+      This format cannot be used for arithmetic operations. Arithmetic operations are more
+      efficient in the compressed format. A matrix in the triplet format can be converted
+      to the compressed format using the functions [`to_csc`] and [`to_csr`]. *)
 
   type 'a t = {
     rows : int;
@@ -143,7 +142,8 @@ module Cs_tri_base = struct
 end
 
 module Nnz_index = struct
-  (** Can be used to later access a non-zero element of a compressed matrix in constant time *)
+  (** Can be used to later access a non-zero element of a compressed matrix in constant
+      time *)
   type t = NNZ of int [@@deriving show, eq]
 end
 

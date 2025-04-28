@@ -2,19 +2,25 @@ open Dynarray
 
 let ( .!() ) = Dynarray.get
 let ( .!()<- ) = Dynarray.set
-
-let of_array_array m =
-  map of_array (of_array m)
-
-let to_array_array m =
-  to_array (map to_array m)
+let of_array_array m = map of_array (of_array m)
+let to_array_array m = to_array (map to_array m)
 
 let subarray xs start len =
-  if len <= 0 then [||] else
-  Array.init len (fun i -> xs.!(i + start))
+  if len <= 0 then [||] else Array.init len (fun i -> xs.!(i + start))
 
-let sub xs start len =
-  subarray xs start len |> of_array
+let sub xs start len = subarray xs start len |> of_array
+
+let insert arr index x =
+  let n = Dynarray.length arr in
+  if index < 0 || index > n then invalid_arg "insert: index out of bounds"
+  else if n = 0 then Dynarray.add_last arr x
+  else (
+    Dynarray.add_last arr (Dynarray.get arr (n - 1));
+    (* grow by copying last element *)
+    for i = n - 1 downto index do
+      Dynarray.set arr (i + 1) (Dynarray.get arr i)
+    done;
+    Dynarray.set arr index x)
 
 let zip xs ys =
   let len = min (length xs) (length ys) in
@@ -26,8 +32,7 @@ let zip xs ys =
     done;
     arr
 
-let zip_array xs ys =
-  zip (of_array xs) (of_array ys) |> to_array
+let zip_array xs ys = zip (of_array xs) (of_array ys) |> to_array
 
 let foldi f x a =
   let r = ref x in
@@ -37,7 +42,7 @@ let foldi f x a =
   !r
 
 let map_inplace f xs =
-  for i = 0 to (length xs - 1) do
+  for i = 0 to length xs - 1 do
     xs.!(i) <- f xs.!(i)
   done
 
@@ -139,3 +144,13 @@ let binary_search arr x =
       else aux low (mid - 1)
   in
   aux 0 (length arr - 1)
+
+let binary_search_from arr start_idx end_idx x =
+  let rec aux lo hi =
+    if lo >= hi then Error lo
+    else
+      let mid = (lo + hi) / 2 in
+      let mid_val = Dynarray.get arr mid in
+      if mid_val = x then Ok mid else if mid_val < x then aux (mid + 1) hi else aux lo mid
+  in
+  aux start_idx end_idx

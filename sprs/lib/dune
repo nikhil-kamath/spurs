@@ -1,5 +1,6 @@
 (library
  (public_name sprs)
  (name sprs)
+ (libraries fmt)
  (preprocess
   (pps ppx_deriving.show ppx_fields_conv ppx_deriving.eq)))

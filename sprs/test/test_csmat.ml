@@ -19,8 +19,10 @@ let test_new_csr_success () =
   let m = try_new_csr (3, 3) indptr indices data in
   check bool "Should be valid CSR" true (Result.is_ok m);
   let m = Result.get_ok m in
-  check (array int) "Should contain same indptr" indptr (Cs_mat_base.get_indptr m |> Dynarray.to_array);
-  check (array int) "Should contain same indices" indices (Cs_mat_base.get_indices m |> Dynarray.to_array);
+  check (array int) "Should contain same indptr" indptr
+    (Cs_mat_base.get_indptr m |> Dynarray.to_array);
+  check (array int) "Should contain same indices" indices
+    (Cs_mat_base.get_indices m |> Dynarray.to_array);
   check (array int) "Should contain same data" data (Cs_mat_base.get_data m |> Dynarray.to_array)
 
 let test_invalid_indptr_size () =
@@ -208,6 +210,42 @@ let test_index () =
   m.@(8, 8) <- 2.;
   check (option (float 0.000001)) "" (Some 2.) m.@(8, 8)
 
+let test_append_outer () =
+  let m_array = [| [| 1.; 2.; 3. |]; [| 4.; 5.; 6. |]; [| 7.; 8.; 9. |] |] in
+  let m = csr_from_dense m_array in
+  let v = [| 10.; 11.; 12. |] in
+  let m_expected = csr_from_dense (Array.append m_array [| v |]) in
+  append_outer m v;
+
+  check cs_mat_base_float "" m_expected m
+
+let test_append_outer_2 () =
+  let m = eye_csr 3 in
+  append_outer m [| 0.; 0.; 0. |];
+  let m = to_other_storage m in
+  append_outer m [| 0.; 0.; 0.; 1. |];
+
+  check cs_mat_base_float "" (eye_csc 4) m
+
+let test_insert_existing () =
+  let m = eye_csr 2 in
+  insert m 0 0 2.;
+  let m_expected = csr_from_dense [| [| 2.; 0. |]; [| 0.; 1. |] |] in
+  check cs_mat_base_float "" m_expected m
+
+let test_insert_no_resize () =
+  let m = eye_csr 2 in
+  insert m 1 0 2.;
+  let m_expected = csr_from_dense [| [| 1.; 0. |]; [| 2.; 1. |] |] in
+  check cs_mat_base_float "" m_expected m
+
+let test_insert_oob () =
+  let m = empty CSR 1 |> Result.get_ok in
+  insert m 0 0 1.;
+  insert m 1 1 1.;
+  insert m 2 2 1.;
+  check cs_mat_base_float "" m (eye_csr 3)
+
 let () =
   run "Sparse.Csmat"
     [
@@ -237,4 +275,12 @@ let () =
           test_case "Row/col lookups" `Quick test_index;
         ] );
       ("operations", [ test_case "Scaling" `Quick test_scale ]);
+      ( "modifications",
+        [
+          test_case "Append outer" `Quick test_append_outer;
+          test_case "Append outer 2" `Quick test_append_outer_2;
+          test_case "Inserting existing element" `Quick test_insert_existing;
+          test_case "Inserting without resizing" `Quick test_insert_no_resize;
+          test_case "Inserting out of bounds" `Quick test_insert_oob;
+        ] );
     ]

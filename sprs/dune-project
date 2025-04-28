@@ -4,6 +4,8 @@
 
 (generate_opam_files true)
 
+(subst disabled)
+
 (source
  (github nikhil-kamath/sprs))
 
@@ -11,12 +13,13 @@
 
 (maintainers "Nikhil Kamath <nikhil.k123234@gmail.com")
 
-(license LICENSE)
+(license MIT)
 
 (documentation https://url/to/documentation)
 
 (package
  (name sprs)
+ (version 0.1.0)
  (synopsis "A lightweight native sparse matrix library")
  (depends
   ocaml

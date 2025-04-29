@@ -107,6 +107,16 @@ let new_csr_from_unsorted shape = new_from_unsorted CSR shape
     If necessary, the indices will be sorted. *)
 let new_csc_from_unsorted shape = new_from_unsorted CSC shape
 
+(** Iterates through the matrix, calling [f outer inner x] on each element. *)
+let iteroi f (m : 'a Cs_mat_base.t) =
+  let open Dynarray in
+  Indptr.iter_outeri m.indptr (fun outer start stop ->
+      for i = start to stop - 1 do
+        let inner = m.indices.!(i) in
+        let x = m.data.!(i) in
+        f outer inner x
+      done)
+
 (** Create a matrix mathematically equal to this one, but with the opposite storage: CSR →
     CSC, or CSC → CSR. *)
 let to_other_storage m =
@@ -126,16 +136,13 @@ let to_other_storage m =
     indptr;
 
   (* iterate through data, using inner and outer dimensions to assign corresponding indices/data*)
-  Indptr.iter_outeri m.indptr (fun outer start stop ->
-      for i = start to stop - 1 do
-        let inner = m.indices.!(i) in
-        let x = m.data.!(i) in
-        let dest = indptr.!(inner) in
-        indices.!(dest) <- outer;
-        data.!(dest) <- x;
-        (* increment each inner dimension's start temporarily *)
-        indptr.!(inner) <- indptr.!(inner) + 1
-      done);
+  iteroi
+    (fun outer inner x ->
+      let dest = indptr.!(inner) in
+      indices.!(dest) <- outer;
+      data.!(dest) <- x;
+      indptr.!(inner) <- indptr.!(inner) + 1)
+    m;
 
   (* undo the incrementing from the assignments *)
   let last = ref 0 in
@@ -262,8 +269,8 @@ let outer_view (m : 'a Cs_mat_base.t) outer =
     (* TODO: should we make the Array.subs reference copies? *)
     Some
       (Vec.new_trusted (inner_dims m)
-         (Array_utils.sub m.indices start len)
-         (Array_utils.sub m.data start len))
+         (Array_utils.sub m.indices start len |> Dynarray.to_array)
+         (Array_utils.sub m.data start len |> Dynarray.to_array))
 
 (** Try to find the value at the given outer and inner indices.
 
@@ -383,3 +390,75 @@ let insert (m : 'a Cs_mat_base.t) row col x =
   match m.storage with
   | CSR -> insert_outer_inner m row col x
   | CSC -> insert_outer_inner m col row x
+
+(** {1 Miscellaneous Functions & Nice-To-Haves} *)
+
+(** Returns the density (proportion non-zero) of a matrix *)
+let density (m : 'a Cs_mat_base.t) =
+  float_of_int (nnz m) /. float_of_int (m.nrows * m.ncols)
+
+(** Get the diagonal of a sparse matrix. {i Returns as a sparse vector} *)
+let diag (m : 'a Cs_mat_base.t) =
+  let dim = min m.nrows m.ncols in
+  let indices = Dynarray.create () in
+  let data = Dynarray.create () in
+  for i = 0 to dim - 1 do
+    match get m (i, i) with
+    | Some x ->
+        Dynarray.add_last indices i;
+        Dynarray.add_last data x
+    | None -> ()
+  done;
+  Vec.new_trusted dim (Dynarray.to_array indices) (Dynarray.to_array data)
+
+(** Create a new CSR matrix equivalent to this one. If this is a CSR matrix, it is
+    returned as a value. For a version that copies, see {!to_csr} *)
+let into_csr (m : 'a Cs_mat_base.t) =
+  match m.storage with CSR -> m | CSC -> to_other_storage m
+
+(** Create a new CSR matrix equivalent to this one. If this is a CSR matrix, create a
+    copy. *)
+let to_csr (m : 'a Cs_mat_base.t) =
+  match m.storage with CSR -> Cs_mat_base.copy m | CSC -> to_other_storage m
+
+(** Create a new CSC matrix equivalent to this one. If this is a CSC matrix, it is
+    returned as a value. For a version that copies, see {!to_csc} *)
+let into_csc (m : 'a Cs_mat_base.t) =
+  match m.storage with CSR -> to_other_storage m | CSC -> m
+
+(** Create a new CSC matrix equivalent to this one. If this is a CSC matrix, create a
+    copy. *)
+let to_csc (m : 'a Cs_mat_base.t) =
+  match m.storage with CSR -> to_other_storage m | CSC -> Cs_mat_base.copy m
+
+(** Returns [true] if the input matrix is in CSR format *)
+let is_csr (m : 'a Cs_mat_base.t) = m.storage = CSR
+
+(** Returns [true] if the input matrix is in CSC format *)
+let is_csc (m : 'a Cs_mat_base.t) = m.storage = CSC
+
+(** Returns a new sparse matrix with the elements mapped by [f] *)
+let map f (m : 'a Cs_mat_base.t) =
+  let m2 = Cs_mat_base.copy m in
+  Array_utils.map_inplace f m2.data;
+  m2
+
+(** Maps [f] over the sparse matrix in-place. *)
+let map_inplace f (m : 'a Cs_mat_base.t) = Array_utils.map_inplace f m.data
+
+(** Returns the maximum number of nonzeros in each outer dimension *)
+let max_outer_nnz (m : 'a Cs_mat_base.t) =
+  let r = ref 0 in
+  Indptr.iter_outer m.indptr (fun start stop -> r := max !r (stop - start));
+  !r
+
+(** Converts into a dense matrix. *)
+let to_dense (m : float Cs_mat_base.t) =
+  let res = Array.make_matrix m.nrows m.ncols 0. in
+  let assign outer inner x =
+    match m.storage with
+    | CSR -> res.(outer).(inner) <- x
+    | CSC -> res.(inner).(outer) <- x
+  in
+  iteroi (fun outer inner x -> assign outer inner x) m;
+  res

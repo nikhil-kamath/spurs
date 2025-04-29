@@ -1,6 +1,9 @@
 open Sparse
 
-let new_trusted n indices data = Cs_vec_base.{ dim = n; indices; data }
+let new_trusted n indices data =
+  let indices = Dynarray.of_array indices in
+  let data = Dynarray.of_array data in
+  Cs_vec_base.{ dim = n; indices; data }
 
 let nnz_index (v : 'a Cs_vec_base.t) index =
   let open Option in

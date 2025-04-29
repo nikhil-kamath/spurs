@@ -8,6 +8,9 @@ let cs_mat_base = testable (Fmt.of_to_string (Cs_mat_base.show Fmt.int)) (Cs_mat
 let cs_mat_base_float =
   testable (Fmt.of_to_string (Cs_mat_base.show Fmt.float)) (Cs_mat_base.equal ( = ))
 
+let cs_vec_base_float =
+  testable (Fmt.of_to_string (Cs_vec_base.show Fmt.float)) (Cs_vec_base.equal ( = ))
+
 let cs_mat_base_result = result cs_mat_base string
 let nnz_index_testable = testable (Fmt.of_to_string Nnz_index.show) Nnz_index.equal
 let nnz_index_option = option nnz_index_testable
@@ -246,6 +249,58 @@ let test_insert_oob () =
   insert m 2 2 1.;
   check cs_mat_base_float "" m (eye_csr 3)
 
+let test_insert_formats () =
+  let m =
+    csr_from_dense [| [| 1.; 2.; 3. |]; [| 0.; 0.; 0. |]; [| 0.; 0.; 0. |]; [| 4.; 5.; 6. |] |]
+  in
+  let m2 = to_other_storage m in
+  insert m 1 1 999.;
+  insert m2 1 1 999.;
+  let m2 = to_other_storage m2 in
+  check cs_mat_base_float "" m m2
+
+let test_density () =
+  let m = eye_csr 3 in
+  check (float 0.00001) "" (3. /. 9.) (density m)
+
+let test_diag () =
+  let m = eye_csr 3 in
+  let expected = Vec.new_trusted 3 [| 0; 1; 2 |] [| 1.; 1.; 1. |] in
+  check cs_vec_base_float "" expected (diag m)
+
+let test_diag_2 () =
+  let m = csr_from_dense [| [| 0.; 0.; 0. |]; [| 0.; 1.; 0. |]; [| 0.; 0.; 0. |] |] in
+  let expected = Vec.new_trusted 3 [| 1 |] [| 1. |] in
+  check cs_vec_base_float "" expected (diag m)
+
+let test_map () =
+  let m = eye_csr 2 in
+  let expected = csr_from_dense [| [| 2.; 0. |]; [| 0.; 2. |] |] in
+  let m2 = Csmat.map (fun x -> x +. 1.) m in
+  check cs_mat_base_float "" expected m2;
+  (* unchanged *)
+  check (float 0.00001) "" 1. m.!!(NNZ 0)
+
+let test_map_inplace () =
+  let m = eye_csr 2 in
+  let expected = csr_from_dense [| [| 2.; 0. |]; [| 0.; 2. |] |] in
+  Csmat.map_inplace (fun x -> x +. 1.) m;
+  check cs_mat_base_float "" expected m
+
+let test_max_outer_nnz () =
+  let m = eye_csc 3 in
+  check int "" 1 (max_outer_nnz m);
+
+  insert m 1 2 99.;
+  check int "" 2 (max_outer_nnz m)
+
+let test_to_dense () =
+  let m = [| [| 1.; 0.; 2.; 1e-7; 1. |]; [| 0.; 0.; 0.; 1.; 0. |]; [| 3.; 0.; 1.; 0.; 0. |] |] in
+  let m_csr = csr_from_dense m in
+  let m_csc = csc_from_dense m in
+  check (array (array (float 0.00001))) "" m (to_dense m_csr);
+  check (array (array (float 0.00001))) "" m (to_dense m_csc)
+
 let () =
   run "Sparse.Csmat"
     [
@@ -282,5 +337,16 @@ let () =
           test_case "Inserting existing element" `Quick test_insert_existing;
           test_case "Inserting without resizing" `Quick test_insert_no_resize;
           test_case "Inserting out of bounds" `Quick test_insert_oob;
+          test_case "Inserting in CSC" `Quick test_insert_formats;
+        ] );
+      ( "other",
+        [
+          test_case "Density" `Quick test_density;
+          test_case "Diag" `Quick test_diag;
+          test_case "Diag 2" `Quick test_diag_2;
+          test_case "Map" `Quick test_map;
+          test_case "Map in place" `Quick test_map_inplace;
+          test_case "Max outer nnz" `Quick test_max_outer_nnz;
+          test_case "To dense" `Quick test_to_dense;
         ] );
     ]

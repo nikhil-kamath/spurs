@@ -301,6 +301,38 @@ let test_to_dense () =
   check (array (array (float 0.00001))) "" m (to_dense m_csr);
   check (array (array (float 0.00001))) "" m (to_dense m_csc)
 
+let test_degrees () =
+  (*
+    1 0 0 3 1
+    0 2 0 0 0
+    0 0 0 1 0 
+    3 0 1 1 0 
+    1 0 0 0 1
+  *)
+  let indptr = [| 0; 3; 4; 5; 8; 10 |] in
+  let indices = [| 0; 3; 4; 1; 4; 0; 2; 3; 0; 4 |] in
+  let data = [| 1; 3; 1; 2; 1; 3; 1; 1; 1; 1 |] in
+  let m = new_csc (5, 5) indptr indices data in
+  check (array int) "" [| 2; 0; 1; 2; 1 |] (degrees m)
+
+let test_zero () =
+  let m = zero (3, 3) in
+  let expected = csr_from_dense (Array.make_matrix 3 3 0.) in
+  check cs_mat_base_float "" expected m
+
+let test_onehot_zero () =
+  let m = zero (3, 3) in
+  check cs_mat_base_float "" m (to_inner_onehot m)
+
+let test_onehot_eye () =
+  let m = new_csr (2, 2) [| 0; 2; 4 |] [| 0; 1; 0; 1 |] [| 2.; 0.; 0.; 2. |] in
+  check cs_mat_base_float "" (eye_csr 2) (to_inner_onehot m)
+
+let test_onehot_csc () =
+  let m = new_csc (2, 3) [| 0; 0; 1; 1 |] [| 1 |] [| 2. |] in
+  let expected = new_csc (2, 3) [| 0; 0; 1; 1 |] [| 1 |] [| 1. |] in
+  check cs_mat_base_float "" expected (to_inner_onehot m)
+
 let () =
   run "Sparse.Csmat"
     [
@@ -323,6 +355,7 @@ let () =
           test_case "CSR <-> CSC conversion 2" `Quick test_csr_to_csc_2;
           test_case "CSR from dense" `Quick test_csr_from_dense;
           test_case "CSC from dense" `Quick test_csc_from_dense;
+          test_case "Zero" `Quick test_zero;
         ] );
       ( "lookups",
         [
@@ -348,5 +381,9 @@ let () =
           test_case "Map in place" `Quick test_map_inplace;
           test_case "Max outer nnz" `Quick test_max_outer_nnz;
           test_case "To dense" `Quick test_to_dense;
+          test_case "Degrees" `Quick test_degrees;
+          test_case "Onehot (zero)" `Quick test_onehot_zero;
+          test_case "Onehot (eye)" `Quick test_onehot_eye;
+          test_case "Onehot (CSC)" `Quick test_onehot_csc;
         ] );
     ]

@@ -56,7 +56,8 @@ let new_checked storage shape indptr indices data =
 let try_new_csr shape = new_checked CSR shape
 let try_new_csc shape = new_checked CSC shape
 
-(** Create a new CSR sparse matrix.
+(** [new_csr indptr indices data] creates a new CSR matrix. Raises an exception if the
+    inputs do not describe a valid CSR matrix.
 
     See {!new_csc} for the CSC equivalent. *)
 let new_csr shape indptr indices data =
@@ -65,7 +66,8 @@ let new_csr shape indptr indices data =
   | Error s ->
       raise (MatrixException (Printf.sprintf "Could not create sparse matrix: %s" s))
 
-(** Create a new CSC sparse matrix.
+(** [new_csc indptr indices data] creates a new CSC matrix. Raises an exception if the
+    inputs do not describe a valid CSC matrix.
 
     See {!new_csr} for the CSR equivalent. *)
 let new_csc shape indptr indices data =
@@ -243,8 +245,16 @@ let empty storage inner_size =
 
 (** Create a new CSR matrix representing the zero matrix. *)
 let zero shape =
-  let nrows, _ncols = shape in
-  new_checked CSR shape (Array.make (nrows + 1) 0) [||] [||]
+  let nrows, ncols = shape in
+  Cs_mat_base.
+    {
+      nrows;
+      ncols;
+      storage = CSR;
+      indptr = Dynarray.make (nrows + 1) 0;
+      indices = Dynarray.create ();
+      data = Dynarray.create ();
+    }
 
 (** {1 Matrix Operations} *)
 
@@ -261,7 +271,7 @@ let scale (m : float Cs_mat_base.t) c =
 (** {1 Indexing and lookups} *)
 
 (** Return the inner vector at outer index [outer]. *)
-let outer_view (m : 'a Cs_mat_base.t) outer =
+let get_outer (m : 'a Cs_mat_base.t) outer =
   if outer >= outer_dims m then None
   else
     let start, stop = Indptr.outer_inds_sz m.indptr outer in
@@ -272,6 +282,16 @@ let outer_view (m : 'a Cs_mat_base.t) outer =
          (Array_utils.sub m.indices start len |> Dynarray.to_array)
          (Array_utils.sub m.data start len |> Dynarray.to_array))
 
+(** Same as {!get_outer}, but raises an exception if the outer index is invalid. *)
+let get_outer_exn (m : 'a Cs_mat_base.t) outer = get_outer m outer |> Option.get
+
+(** Calls [f outer v] on each outer dimension, where [v] is the corresponding sparse
+    vector. *)
+let itero f (m : 'a Cs_mat_base.t) =
+  for outer = 0 to outer_dims m - 1 do
+    f outer (get_outer_exn m outer)
+  done
+
 (** Try to find the value at the given outer and inner indices.
 
     Returns [None] if the indexing is invalid, otherwise returns [Some NNZ index]. *)
@@ -281,7 +301,7 @@ let nnz_index_outer_inner m outer inner =
   if outer >= outer_dims m then None
   else
     let offset, _ = Indptr.outer_inds_sz m.indptr outer in
-    let* v = outer_view m outer in
+    let* v = get_outer m outer in
     let* (NNZ index) = Vec.nnz_index v inner in
     Some (Nnz_index.NNZ (index + offset))
 
@@ -462,3 +482,46 @@ let to_dense (m : float Cs_mat_base.t) =
   in
   iteroi (fun outer inner x -> assign outer inner x) m;
   res
+
+(** Returns a vector containing the degree of each vertex, ie the number of neighbors of
+    each vertex. We do not count diagonal entries as a neighbor. *)
+let degrees (m : 'a Cs_mat_base.t) =
+  let count = Array.make (outer_dims m) 0 in
+  iteroi
+    (fun outer inner _ -> if outer <> inner then count.(outer) <- count.(outer) + 1)
+    m;
+  count
+
+(** Generate a one-hot matrix, compressing the inner dimension.
+
+    Returns a matrix with the same size, the same CSR/CSC type, and a single value of 1.0
+    within each {i populated} inner vector. *)
+
+let to_inner_onehot (m : 'a Cs_mat_base.t) =
+  let open Dynarray in
+  let indptr_counter = ref 0 in
+  let indptr = create () in
+  let indices = create () in
+  let data = create () in
+  itero
+    (fun _ v ->
+      (* build indptr *)
+      add_last indptr !indptr_counter;
+      (* only add on populated outer dims *)
+      if not (Vec.is_empty v) then (
+        (* keep the index of the max inner value for this outer dim *)
+        let index =
+          Vec.fold
+            (fun (maxi, maxd) i d -> if d > maxd then (i, d) else (maxi, maxd))
+            (-1, -.infinity) v
+          |> fst
+        in
+        add_last indices index;
+        add_last data 1.;
+        (* one-hot values *)
+        incr indptr_counter))
+    m;
+  (* set final indptr *)
+  add_last indptr !indptr_counter;
+  Cs_mat_base.
+    { storage = m.storage; nrows = m.nrows; ncols = m.ncols; indptr; indices; data }

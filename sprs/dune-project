@@ -15,7 +15,7 @@
 
 (license MIT)
 
-(documentation https://url/to/documentation)
+(documentation https://nikhil-kamath.github.io/sprs-ocaml/)
 
 (package
  (name sprs)
@@ -23,8 +23,10 @@
  (synopsis "A lightweight native sparse matrix library")
  (depends
   ocaml
+  ppx_deriving
+  ppx_fields_conv
   (alcotest :with-test))
  (tags
-  ("add topics" "to describe" your project)))
+  ("sparse" "matrices")))
 
 ; See the complete stanza docs at https://dune.readthedocs.io/en/stable/reference/dune-project/index.html

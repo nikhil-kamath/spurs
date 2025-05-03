@@ -5,13 +5,15 @@ synopsis: "A lightweight native sparse matrix library"
 maintainer: ["Nikhil Kamath <nikhil.k123234@gmail.com"]
 authors: ["Nikhil Kamath <nikhil.k123234@gmail.com>"]
 license: "MIT"
-tags: ["add topics" "to describe" "your" "project"]
+tags: ["sparse" "matrices"]
 homepage: "https://github.com/nikhil-kamath/sprs"
 doc: "https://url/to/documentation"
 bug-reports: "https://github.com/nikhil-kamath/sprs/issues"
 depends: [
   "dune" {>= "3.17"}
   "ocaml"
+  "ppx_deriving"
+  "ppx_fields_conv"
   "alcotest" {with-test}
   "odoc" {with-doc}
 ]

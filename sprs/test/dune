@@ -1,4 +1,4 @@
 (tests
- (names test_indptr test_sparse test_csmat)
- (modules test_indptr test_sparse test_csmat)
+ (names test_indptr test_sparse test_csmat test_csvec)
+ (modules test_indptr test_sparse test_csmat test_csvec)
  (libraries sprs alcotest))

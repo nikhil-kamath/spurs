@@ -78,7 +78,7 @@ let sort_like_from keys vals start stop =
       set vals (start + i) (snd pairs.(i))
     done)
 
-(** sort keys and vals in place, using keys to sort both *)
+(** [sort_like keys vals] sorts keys and vals in place, using keys to sort both *)
 let sort_like keys vals =
   let stop = min (length keys) (length vals) in
   sort_like_from keys vals 0 stop
@@ -134,6 +134,7 @@ let print_int_array arr =
   Array.iter (fun x -> Printf.printf " %d;" x) arr;
   Printf.printf " |]\n"
 
+(** [binary_search arr x] searches for [x] in [arr]. If it does not exist, returns [None]*)
 let binary_search arr x =
   let rec aux low high =
     if low > high then None

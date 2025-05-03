@@ -105,6 +105,9 @@ module Cs_vec_base = struct
   let get_dim v = v.dim
   let get_indices v = v.indices
   let get_data v = v.data
+
+  let copy v =
+    { dim = v.dim; indices = Dynarray.copy v.indices; data = Dynarray.copy v.data }
 end
 
 module Cs_tri_base = struct

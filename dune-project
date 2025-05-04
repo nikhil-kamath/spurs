@@ -1,7 +1,7 @@
 (lang dune 3.17)
 
 (name spurs)
-(version v0.1-1-gc74c356-dirty)
+(version v0.1.0)
 
 (generate_opam_files true)
 
@@ -21,7 +21,7 @@
  (version 0.1.0)
  (synopsis "A lightweight native sparse matrix library")
  (depends
-  ocaml
+  (ocaml (>= 5.3.0))
   ppx_deriving
   ppx_fields_conv
   fmt

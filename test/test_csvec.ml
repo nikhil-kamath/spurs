@@ -1,30 +1,27 @@
-open Spurs.Sparse
+open Spurs
 open Spurs.Csvec
 open Alcotest
 
-let cs_vec_base_float =
-  testable (Fmt.of_to_string (Cs_vec_base.show Fmt.float)) (Cs_vec_base.equal ( = ))
-
-let cs_mat_base_float =
-  testable (Fmt.of_to_string (Cs_mat_base.show Fmt.float)) (Cs_mat_base.equal ( = ))
+let csvec = testable (Fmt.of_to_string (show Fmt.float)) (Csvec.equal ( = ))
+let csmat = testable (Fmt.of_to_string (Csmat.show Fmt.float)) (Csmat.equal ( = ))
 
 let test_invalid_unsorted () =
   let indices = [| 1; 3; 2 |] in
   let data = [| 0.; 0.; 0. |] in
   let v = try_new_csvec 4 indices data in
-  check (result cs_vec_base_float string) "" (Error "Unsorted indices") v
+  check (result csvec string) "" (Error "Unsorted indices") v
 
 let test_invalid_mismatch () =
   let indices = [| 1; 2; 3 |] in
   let data = [| 0.; 0. |] in
   let v = try_new_csvec 4 indices data in
-  check (result cs_vec_base_float string) "" (Error "Indices and data have unequal lengths") v
+  check (result csvec string) "" (Error "Indices and data have unequal lengths") v
 
 let test_invalid_oob () =
   let indices = [| 1; 2; 3 |] in
   let data = [| 0.; 0.; 0. |] in
   let v = try_new_csvec 3 indices data in
-  check (result cs_vec_base_float string) "" (Error "Indices larger than vector size") v
+  check (result csvec string) "" (Error "Indices larger than vector size") v
 
 let test_from_unsorted () =
   let indices = [| 1; 3; 2 |] in
@@ -32,13 +29,13 @@ let test_from_unsorted () =
   let v = new_from_unsorted 5 indices data in
   let expected = new_csvec 5 [| 1; 2; 3 |] [| 111.; 222.; 333. |] in
   check bool "Should be valid" true (Result.is_ok v);
-  check cs_vec_base_float "" expected (Result.get_ok v)
+  check csvec "" expected (Result.get_ok v)
 
 let test_append () =
   let v = new_csvec 5 [| 0; 1; 2 |] [| 0.; 0.; 0. |] in
   let expected = new_csvec 5 [| 0; 1; 2; 3 |] [| 0.; 0.; 0.; 0. |] in
   append v 3 0.;
-  check cs_vec_base_float "" expected v
+  check csvec "" expected v
 
 let test_append_oob () =
   let v = empty 3 in
@@ -51,12 +48,12 @@ let test_append_unsorted () =
 let test_to_col () =
   let v = new_csvec 3 [| 0; 2 |] [| 99.; 99. |] in
   let expected = Spurs.Csmat.csc_from_dense [| [| 99. |]; [| 0. |]; [| 99. |] |] in
-  check cs_mat_base_float "" expected (to_col v)
+  check csmat "" expected (Csmat.to_col v)
 
 let test_to_row () =
   let v = new_csvec 3 [| 0; 2 |] [| 99.; 99. |] in
   let expected = Spurs.Csmat.csr_from_dense [| [| 99.; 0.; 99. |] |] in
-  check cs_mat_base_float "" expected (to_row v)
+  check csmat "" expected (Csmat.to_row v)
 
 let test_l1_norm () =
   let v = empty 0 in
@@ -95,10 +92,10 @@ let test_normalize () =
   check int "" 0 (nnz v);
 
   let v = new_csvec 8 [| 1; 4; 5 |] [| 0.; 0.; 0. |] in
-  let expected = Cs_vec_base.copy v in
+  let expected = copy v in
   normalize v;
   check int "" 3 (nnz v);
-  check cs_vec_base_float "" expected v;
+  check csvec "" expected v;
 
   let v = new_csvec 8 [| 0; 1; 4; 5; 7 |] [| 0.; 1.; 4.; 5.; 7. |] in
   let norm = Float.sqrt (1. +. (4. *. 4.) +. (5. *. 5.) +. (7. *. 7.)) in
@@ -106,7 +103,7 @@ let test_normalize () =
     new_csvec 8 [| 0; 1; 4; 5; 7 |] [| 0.; 1. /. norm; 4. /. norm; 5. /. norm; 7. /. norm |]
   in
   normalize v;
-  check cs_vec_base_float "" expected v;
+  check csvec "" expected v;
   check (float 0.00001) "" 0. (l2_norm v -. 1.)
 
 let () =

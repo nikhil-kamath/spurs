@@ -1,7 +1,4 @@
-open Array_utils
-
-(* number of nonzero  elements described by this indptr *)
-let nnz indptr = Dynarray.(if length indptr = 0 then 0 else indptr.!(length indptr - 1))
+open Utils
 
 (* Fold over outer dimension, giving start and end indices, as well as outer dimension *)
 let fold_outeri (indptr : int Dynarray.t) f x =
@@ -28,6 +25,9 @@ let map_outer_list (indptr : int Dynarray.t) f =
     l := f indptr.!(i) indptr.!(i + 1) :: !l
   done;
   List.rev !l
+
+let check_indices indptr indices =
+  map_outer_list indptr (Utils.is_sorted_from indices) |> List.for_all Fun.id
 
 let map_outer (indptr : int Dynarray.t) f = map_outer_list indptr f |> Array.of_list
 

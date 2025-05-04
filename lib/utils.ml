@@ -155,3 +155,11 @@ let binary_search_from arr start_idx end_idx x =
       if mid_val = x then Ok mid else if mid_val < x then aux (mid + 1) hi else aux lo mid
   in
   aux start_idx end_idx
+
+(** Lazily evaluates a list of conditions and returns the first [false] as an error with
+    the corresponding message *)
+let rec run_checks = function
+  | [] -> Ok ()
+  | cond :: rest ->
+      let failed, msg = Lazy.force cond in
+      if failed then Error msg else run_checks rest

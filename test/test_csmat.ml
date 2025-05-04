@@ -1,32 +1,103 @@
 open Spurs
-open Spurs.Sparse
 open Spurs.Csmat
 open Alcotest
 
-let cs_mat_base = testable (Fmt.of_to_string (Cs_mat_base.show Fmt.int)) (Cs_mat_base.equal ( = ))
-
-let cs_mat_base_float =
-  testable (Fmt.of_to_string (Cs_mat_base.show Fmt.float)) (Cs_mat_base.equal ( = ))
-
-let cs_vec_base_float =
-  testable (Fmt.of_to_string (Cs_vec_base.show Fmt.float)) (Cs_vec_base.equal ( = ))
-
-let cs_mat_base_result = result cs_mat_base string
-let nnz_index_testable = testable (Fmt.of_to_string Nnz_index.show) Nnz_index.equal
+let csmat_int = testable (Fmt.of_to_string (show Fmt.int)) (Csmat.equal ( = ))
+let csmat = testable (Fmt.of_to_string (show Fmt.float)) (Csmat.equal ( = ))
+let csmat_result = result csmat string
+let csvec = testable (Fmt.of_to_string (Csvec.show Fmt.float)) (Csvec.equal ( = ))
+let nnz_index_testable = testable (Fmt.of_to_string Common.Nnz_index.show) Common.Nnz_index.equal
 let nnz_index_option = option nnz_index_testable
+
+let test_valid_1 () =
+  let indices = [| 2; 4; 0; 3; 1 |] |> Dynarray.of_array in
+  let indptr = [| 0; 2; 2; 4; 5 |] |> Dynarray.of_array in
+  let outer = 4 in
+  let inner = 5 in
+  check (result unit string) "Valid Sparse matrix 1" (Ok ())
+    (check_structure inner outer indptr indices)
+
+let test_valid_2 () =
+  let indices =
+    [
+      [| 0; 3; 1; 4; 7; 2; 5; 6 |];
+      [| 9; 12; 0; 3; 6; 8; 11; 2 |];
+      [| 5; 9; 1; 4; 7; 3; 10; 6 |];
+      [| 11; 0; 8; 12; 5; 9; 2; 7 |];
+      [| 13; 1; 6; 10; 4; 8; 11; 3 |];
+      [| 12; 5; 9; 13; 7; 10; 1; 8 |];
+      [| 14; 2; 6; 12; 0; 9; 3; 7 |];
+      [| 11; 4; 10; 5; 13; 2; 6; 14 |];
+    ]
+    |> Array.concat |> Dynarray.of_array
+  in
+  let indptr =
+    [
+      [| 0; 2; 5; 7; 10; 13; 15 |];
+      [| 18; 21; 23; 25; 28; 30; 33 |];
+      [| 36; 39; 41; 44; 46; 49; 52 |];
+      [| 54; 57; 59; 61; 64 |];
+    ]
+    |> Array.concat |> Dynarray.of_array
+  in
+  let outer = 25 in
+  let inner = 15 in
+  check (result unit string) "Valid Sparse matrix 2" (Ok ())
+    (check_structure inner outer indptr indices)
+
+let test_invalid_indptr_length () =
+  let indices = [| 2; 4; 0; 3; 1 |] |> Dynarray.of_array in
+  let indptr = [| 0; 2; 2; 4; 5 |] |> Dynarray.of_array in
+  let outer = 3 in
+  let inner = 5 in
+  check (result unit string) "Should error with invalid indptr length"
+    (Error "Indptr length does not match dimension")
+    (check_structure inner outer indptr indices)
+
+let test_invalid_negative_index () =
+  let indices = [| 2; 4; 0; -3; 1 |] |> Dynarray.of_array in
+  let indptr = [| 0; 2; 2; 4; 5 |] |> Dynarray.of_array in
+  let outer = 4 in
+  let inner = 5 in
+  check (result unit string) "Should error with negative index" (Error "Negative index")
+    (check_structure inner outer indptr indices)
+
+let test_invalid_mismatch_indices_indptr () =
+  let indices = [| 2; 4; 0; 3 |] |> Dynarray.of_array in
+  let indptr = [| 0; 2; 2; 4; 5 |] |> Dynarray.of_array in
+  let outer = 4 in
+  let inner = 5 in
+  check (result unit string) "Should error with size mismatch"
+    (Error "Indices length and indptr nnz mismatch")
+    (check_structure inner outer indptr indices)
+
+let test_invalid_unsorted_indices () =
+  let indices = [| 2; 3; 4; 1; 3 |] |> Dynarray.of_array in
+  let indptr = [| 0; 2; 2; 4; 5 |] |> Dynarray.of_array in
+  let outer = 4 in
+  let inner = 5 in
+  check (result unit string) "Should error with unsorted indices" (Error "Indices not sorted")
+    (check_structure inner outer indptr indices)
+
+let test_invalid_index_oob () =
+  let indices = [| 2; 3; 0; 1; 5 |] |> Dynarray.of_array in
+  let indptr = [| 0; 2; 2; 4; 5 |] |> Dynarray.of_array in
+  let outer = 4 in
+  let inner = 5 in
+  check (result unit string) "Should error with index out of bounds"
+    (Error "Index larger than inner dimension")
+    (check_structure inner outer indptr indices)
 
 let test_new_csr_success () =
   let indptr = [| 0; 1; 2; 3 |] in
   let indices = [| 0; 1; 2 |] in
-  let data = [| 9; 9; 9 |] in
+  let data = [| 9.; 9.; 9. |] in
   let m = try_new_csr (3, 3) indptr indices data in
   check bool "Should be valid CSR" true (Result.is_ok m);
   let m = Result.get_ok m in
-  check (array int) "Should contain same indptr" indptr
-    (Cs_mat_base.get_indptr m |> Dynarray.to_array);
-  check (array int) "Should contain same indices" indices
-    (Cs_mat_base.get_indices m |> Dynarray.to_array);
-  check (array int) "Should contain same data" data (Cs_mat_base.get_data m |> Dynarray.to_array)
+  check (array int) "Should contain same indptr" indptr (get_indptr m |> Dynarray.to_array);
+  check (array int) "Should contain same indices" indices (get_indices m |> Dynarray.to_array);
+  check (array (float 0.000001)) "Should contain same data" data (get_data m |> Dynarray.to_array)
 
 let test_invalid_indptr_size () =
   let indptr_fail = [| 0; 1; 2 |] in
@@ -39,61 +110,51 @@ let test_invalid_indptr_size () =
 let test_invalid_oob_index () =
   let indptr = [| 0; 1; 2; 3 |] in
   let indices_fail = [| 0; 1; 4 |] in
-  let data = [| 9; 9; 9 |] in
+  let data = [| 9.; 9.; 9. |] in
   let m = try_new_csr (3, 3) indptr indices_fail data in
-  check cs_mat_base_result "Should return error"
-    (Result.error "Index is larger than inner dimension")
-    m
+  check csmat_result "Should return error" (Result.error "Index larger than inner dimension") m
 
 let test_invalid_bad_nnz_count () =
   let indptr_fail = [| 0; 1; 2; 4 |] in
   let indices = [| 0; 1; 2 |] in
-  let data = [| 9; 9; 9 |] in
+  let data = [| 9.; 9.; 9. |] in
   let m = try_new_csr (3, 3) indptr_fail indices data in
-  check cs_mat_base_result "Should return error"
-    (Result.error "Indices length and indptr's nnz do not match")
-    m
+  check csmat_result "Should return error" (Result.error "Indices length and indptr nnz mismatch") m
 
 let test_invalid_data_indices_mismatch1 () =
   let indptr = [| 0; 1; 2; 3 |] in
   let indices_fail = [| 0; 1 |] in
-  let data = [| 9; 9; 9 |] in
+  let data = [| 9.; 9.; 9. |] in
   let m = try_new_csr (3, 3) indptr indices_fail data in
-  check cs_mat_base_result "Should return error"
-    (Result.error "data and indices have different sizes")
-    m
+  check csmat_result "Should return error" (Result.error "data and indices have different sizes") m
 
 let test_invalid_data_indices_mismatch2 () =
   let indptr = [| 0; 1; 2; 3 |] in
   let indices = [| 0; 1; 2 |] in
-  let data_fail = [| 9; 9; 9; 9 |] in
+  let data_fail = [| 9.; 9.; 9.; 9. |] in
   let m = try_new_csr (3, 3) indptr indices data_fail in
-  check cs_mat_base_result "Should return error"
-    (Result.error "data and indices have different sizes")
-    m
+  check csmat_result "Should return error" (Result.error "data and indices have different sizes") m
 
 let test_invalid_data_indices_mismatch3 () =
   let indptr = [| 0; 1; 2; 3 |] in
   let indices = [| 0; 1; 2 |] in
-  let data_fail = [| 9; 9 |] in
+  let data_fail = [| 9.; 9. |] in
   let m = try_new_csr (3, 3) indptr indices data_fail in
-  check cs_mat_base_result "Should return error"
-    (Result.error "data and indices have different sizes")
-    m
+  check csmat_result "Should return error" (Result.error "data and indices have different sizes") m
 
 let test_invalid_unsorted () =
   let indptr = [| 0; 2; 1; 3 |] in
   let indices = [| 0; 1; 2 |] in
-  let data = [| 9; 9; 9 |] in
+  let data = [| 9.; 9.; 9. |] in
   let m = try_new_csr (3, 3) indptr indices data in
-  check cs_mat_base_result "Should return error" (Result.error "Indptr should be sorted") m
+  check csmat_result "Should return error" (Result.error "Indptr should be sorted") m
 
 let test_invalid_indices_ordering () =
   let indptr = [| 0; 2; 4; 5; 6; 7 |] in
   let indices = [| 3; 2; 3; 4; 2; 1; 3 |] in
-  let data = [| 1; 1; 1; 1; 1; 1; 1 |] in
+  let data = [| 1.; 1.; 1.; 1.; 1.; 1.; 1. |] in
   let m = try_new_csr (5, 5) indptr indices data in
-  check cs_mat_base_result "Should return error" (Result.error "Indices are not sorted") m
+  check csmat_result "Should return error" (Result.error "Indices not sorted") m
 
 let test_new_csr_csc_success () =
   let indptr = [| 0; 2; 5; 6 |] in
@@ -107,11 +168,9 @@ let test_new_csr_csc_success () =
 let test_invalid_csc_indptr_length () =
   let indptr = [| 0; 2; 5; 6 |] in
   let indices = [| 2; 3; 1; 2; 3; 3 |] in
-  let data = [| 1; 1; 1; 1; 1; 1 |] in
+  let data = [| 1.; 1.; 1.; 1.; 1.; 1. |] in
   let m = try_new_csc (3, 4) indptr indices data in
-  check cs_mat_base_result "Should return error"
-    (Result.error "Indptr length does not match dimension")
-    m
+  check csmat_result "Should return error" (Result.error "Indptr length does not match dimension") m
 
 let test_csr_unsorted_indices () =
   let indptr = [| 0; 3; 3; 5; 6; 7 |] in
@@ -122,7 +181,7 @@ let test_csr_unsorted_indices () =
   check bool "Should be valid" true (Result.is_ok m);
   let m = Result.get_ok m in
   check (array int) "Should have sorted indices" indices_sorted (Dynarray.to_array m.indices);
-  Array_utils.swap_arr data 1 2;
+  Utils.swap_arr data 1 2;
   check (array int) "Should have rearranged data" data (Dynarray.to_array m.data)
 
 let test_csr_with_empty_row () =
@@ -143,8 +202,8 @@ let test_csr_to_csc () =
   let csc_truth = new_csc (5, 5) indptr_csc indices_csc data_csc in
   let csc = to_other_storage csr in
   let csr_again = to_other_storage csc in
-  check cs_mat_base "Should be equal" csc_truth csc;
-  check cs_mat_base "Should be equal" csr csr_again
+  check csmat_int "Should be equal" csc_truth csc;
+  check csmat_int "Should be equal" csr csr_again
 
 let test_csr_to_csc_2 () =
   let indptr_csr = [| 0; 2; 4; 7; 9; 12 |] in
@@ -155,37 +214,37 @@ let test_csr_to_csc_2 () =
   let data_csc = [| 1; 5; 3; 10; 6; 8; 2; 11; 4; 9; 7; 12 |] in
   let csr = new_csr (5, 7) indptr_csr indices_csr data_csr in
   let csc = new_csc (5, 7) indptr_csc indices_csc data_csc in
-  check cs_mat_base "Should be equal" csc (to_other_storage csr);
-  check cs_mat_base "Should be equal" csr (to_other_storage csc)
+  check csmat_int "Should be equal" csc (to_other_storage csr);
+  check csmat_int "Should be equal" csr (to_other_storage csc)
 
 let test_csr_from_dense () =
-  let m = Array_utils.eye 3 in
+  let m = Utils.eye 3 in
   let m_sparse = csr_from_dense m in
-  check cs_mat_base_float "Should be equal" (eye_csr 3) m_sparse;
+  check csmat "Should be equal" (eye_csr 3) m_sparse;
 
   let m = [| [| 1.; 0.; 2.; 1e-7; 1. |]; [| 0.; 0.; 0.; 1.; 0. |]; [| 3.; 0.; 1.; 0.; 0. |] |] in
   let m_sparse = csr_from_dense m in
   let m_expected =
     new_csr (3, 5) [| 0; 3; 4; 6 |] [| 0; 2; 4; 3; 0; 2 |] [| 1.; 2.; 1.; 1.; 3.; 1. |]
   in
-  check cs_mat_base_float "Should be equal" m_sparse m_expected
+  check csmat "Should be equal" m_sparse m_expected
 
 let test_csc_from_dense () =
-  let m = Array_utils.eye 3 in
+  let m = Utils.eye 3 in
   let m_sparse = csc_from_dense m in
-  check cs_mat_base_float "Should be equal" (eye_csc 3) m_sparse;
+  check csmat "Should be equal" (eye_csc 3) m_sparse;
 
   let m = [| [| 1.; 0.; 2.; 1e-7; 1. |]; [| 0.; 0.; 0.; 1.; 0. |]; [| 3.; 0.; 1.; 0.; 0. |] |] in
   let m_sparse = csc_from_dense m in
   let m_expected =
     new_csc (3, 5) [| 0; 2; 2; 4; 5; 6 |] [| 0; 2; 0; 2; 1; 0 |] [| 1.; 3.; 2.; 1.; 1.; 1. |]
   in
-  check cs_mat_base_float "Should be equal" m_expected m_sparse
+  check csmat "Should be equal" m_expected m_sparse
 
 let test_scale () =
   let m = scale (eye_csr 3) 2. in
   let m_expected = new_csr (3, 3) [| 0; 1; 2; 3 |] [| 0; 1; 2 |] [| 2.; 2.; 2. |] in
-  check cs_mat_base_float "Should be equal" m_expected m
+  check csmat "Should be equal" m_expected m
 
 let test_nnz_index () =
   let m = eye_csr 11 in
@@ -220,7 +279,7 @@ let test_append_outer () =
   let m_expected = csr_from_dense (Array.append m_array [| v |]) in
   append_outer m v;
 
-  check cs_mat_base_float "" m_expected m
+  check csmat "" m_expected m
 
 let test_append_outer_2 () =
   let m = eye_csr 3 in
@@ -228,26 +287,26 @@ let test_append_outer_2 () =
   let m = to_other_storage m in
   append_outer m [| 0.; 0.; 0.; 1. |];
 
-  check cs_mat_base_float "" (eye_csc 4) m
+  check csmat "" (eye_csc 4) m
 
 let test_insert_existing () =
   let m = eye_csr 2 in
   insert m 0 0 2.;
   let m_expected = csr_from_dense [| [| 2.; 0. |]; [| 0.; 1. |] |] in
-  check cs_mat_base_float "" m_expected m
+  check csmat "" m_expected m
 
 let test_insert_no_resize () =
   let m = eye_csr 2 in
   insert m 1 0 2.;
   let m_expected = csr_from_dense [| [| 1.; 0. |]; [| 2.; 1. |] |] in
-  check cs_mat_base_float "" m_expected m
+  check csmat "" m_expected m
 
 let test_insert_oob () =
   let m = empty CSR 1 |> Result.get_ok in
   insert m 0 0 1.;
   insert m 1 1 1.;
   insert m 2 2 1.;
-  check cs_mat_base_float "" m (eye_csr 3)
+  check csmat "" m (eye_csr 3)
 
 let test_insert_formats () =
   let m =
@@ -257,7 +316,7 @@ let test_insert_formats () =
   insert m 1 1 999.;
   insert m2 1 1 999.;
   let m2 = to_other_storage m2 in
-  check cs_mat_base_float "" m m2
+  check csmat "" m m2
 
 let test_density () =
   let m = eye_csr 3 in
@@ -266,18 +325,18 @@ let test_density () =
 let test_diag () =
   let m = eye_csr 3 in
   let expected = Csvec.new_trusted 3 [| 0; 1; 2 |] [| 1.; 1.; 1. |] in
-  check cs_vec_base_float "" expected (diag m)
+  check csvec "" expected (diag m)
 
 let test_diag_2 () =
   let m = csr_from_dense [| [| 0.; 0.; 0. |]; [| 0.; 1.; 0. |]; [| 0.; 0.; 0. |] |] in
   let expected = Csvec.new_trusted 3 [| 1 |] [| 1. |] in
-  check cs_vec_base_float "" expected (diag m)
+  check csvec "" expected (diag m)
 
 let test_map () =
   let m = eye_csr 2 in
   let expected = csr_from_dense [| [| 2.; 0. |]; [| 0.; 2. |] |] in
   let m2 = Csmat.map (fun x -> x +. 1.) m in
-  check cs_mat_base_float "" expected m2;
+  check csmat "" expected m2;
   (* unchanged *)
   check (float 0.00001) "" 1. m.!!(NNZ 0)
 
@@ -285,7 +344,7 @@ let test_map_inplace () =
   let m = eye_csr 2 in
   let expected = csr_from_dense [| [| 2.; 0. |]; [| 0.; 2. |] |] in
   Csmat.map_inplace (fun x -> x +. 1.) m;
-  check cs_mat_base_float "" expected m
+  check csmat "" expected m
 
 let test_max_outer_nnz () =
   let m = eye_csc 3 in
@@ -318,24 +377,34 @@ let test_degrees () =
 let test_zero () =
   let m = zero (3, 3) in
   let expected = csr_from_dense (Array.make_matrix 3 3 0.) in
-  check cs_mat_base_float "" expected m
+  check csmat "" expected m
 
 let test_onehot_zero () =
   let m = zero (3, 3) in
-  check cs_mat_base_float "" m (to_inner_onehot m)
+  check csmat "" m (to_inner_onehot m)
 
 let test_onehot_eye () =
   let m = new_csr (2, 2) [| 0; 2; 4 |] [| 0; 1; 0; 1 |] [| 2.; 0.; 0.; 2. |] in
-  check cs_mat_base_float "" (eye_csr 2) (to_inner_onehot m)
+  check csmat "" (eye_csr 2) (to_inner_onehot m)
 
 let test_onehot_csc () =
   let m = new_csc (2, 3) [| 0; 0; 1; 1 |] [| 1 |] [| 2. |] in
   let expected = new_csc (2, 3) [| 0; 0; 1; 1 |] [| 1 |] [| 1. |] in
-  check cs_mat_base_float "" expected (to_inner_onehot m)
+  check csmat "" expected (to_inner_onehot m)
 
 let () =
   run "Sparse.Csmat"
     [
+      ( "check_structure",
+        [
+          test_case "Valid 5x5" `Quick test_valid_1;
+          test_case "Valid 25x15" `Quick test_valid_2;
+          test_case "Invalid indptr length" `Quick test_invalid_indptr_length;
+          test_case "Invalid negative index" `Quick test_invalid_negative_index;
+          test_case "Invalid index mismatch" `Quick test_invalid_mismatch_indices_indptr;
+          test_case "Invalid unsorted indices" `Quick test_invalid_unsorted_indices;
+          test_case "Invalid index out of bounds" `Quick test_invalid_index_oob;
+        ] );
       ( "new",
         [
           test_case "Valid 3x3" `Quick test_new_csr_success;

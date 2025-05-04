@@ -1,13 +1,12 @@
 (lang dune 3.17)
 
-(name sprs)
+(name spurs)
+(version v0.1-1-gc74c356-dirty)
 
 (generate_opam_files true)
 
-(subst disabled)
-
 (source
- (github nikhil-kamath/sprs))
+ (github nikhil-kamath/spurs))
 
 (authors "Nikhil Kamath <nikhil.k123234@gmail.com>")
 
@@ -15,16 +14,17 @@
 
 (license MIT)
 
-(documentation https://nikhil-kamath.github.io/sprs-ocaml/)
+(documentation https://nikhil-kamath.github.io/spurs/)
 
 (package
- (name sprs)
+ (name spurs)
  (version 0.1.0)
  (synopsis "A lightweight native sparse matrix library")
  (depends
   ocaml
   ppx_deriving
   ppx_fields_conv
+  fmt
   (alcotest :with-test))
  (tags
   ("sparse" "matrices")))

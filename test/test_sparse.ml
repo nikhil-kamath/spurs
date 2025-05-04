@@ -1,4 +1,4 @@
-open Sprs.Sparse.Utils
+open Spurs.Sparse.Utils
 open Result
 
 let check = Alcotest.(check Alcotest.(result unit string))

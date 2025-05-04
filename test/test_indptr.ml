@@ -1,4 +1,4 @@
-open Sprs.Indptr
+open Spurs.Indptr
 
 let indptr_1 = [| 0; 1; 2; 3 |] |> Dynarray.of_array
 let indptr_2 = [| 0; 1; 2; 4; 5 |] |> Dynarray.of_array

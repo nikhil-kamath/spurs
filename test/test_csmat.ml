@@ -1,6 +1,6 @@
-open Sprs
-open Sprs.Sparse
-open Sprs.Csmat
+open Spurs
+open Spurs.Sparse
+open Spurs.Csmat
 open Alcotest
 
 let cs_mat_base = testable (Fmt.of_to_string (Cs_mat_base.show Fmt.int)) (Cs_mat_base.equal ( = ))

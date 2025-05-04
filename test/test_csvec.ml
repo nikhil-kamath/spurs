@@ -1,5 +1,5 @@
-open Sprs.Sparse
-open Sprs.Csvec
+open Spurs.Sparse
+open Spurs.Csvec
 open Alcotest
 
 let cs_vec_base_float =
@@ -50,12 +50,12 @@ let test_append_unsorted () =
 
 let test_to_col () =
   let v = new_csvec 3 [| 0; 2 |] [| 99.; 99. |] in
-  let expected = Sprs.Csmat.csc_from_dense [| [| 99. |]; [| 0. |]; [| 99. |] |] in
+  let expected = Spurs.Csmat.csc_from_dense [| [| 99. |]; [| 0. |]; [| 99. |] |] in
   check cs_mat_base_float "" expected (to_col v)
 
 let test_to_row () =
   let v = new_csvec 3 [| 0; 2 |] [| 99.; 99. |] in
-  let expected = Sprs.Csmat.csr_from_dense [| [| 99.; 0.; 99. |] |] in
+  let expected = Spurs.Csmat.csr_from_dense [| [| 99.; 0.; 99. |] |] in
   check cs_mat_base_float "" expected (to_row v)
 
 let test_l1_norm () =

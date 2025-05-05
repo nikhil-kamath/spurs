@@ -42,6 +42,21 @@ let new_from_unsorted n indices data =
   new_checked n indices data
 
 let empty n = new_trusted n [||] [||]
+
+(** Create a [Csvec] from an array, ignoring elements less than [epsilon] *)
+let of_dense ?(epsilon = 0.00001) a =
+  let indices = Dynarray.create () in
+  let data = Dynarray.create () in
+  Array.iteri
+    (fun i x ->
+      if abs_float x >= epsilon then (
+        Dynarray.add_last indices i;
+        Dynarray.add_last data x))
+    a;
+  { dim = Array.length a; indices; data }
+
+(** {1 Indexing and Iteration Functions} *)
+
 let nnz (v : 'a t) = Dynarray.length v.data
 
 let nnz_index (v : 'a t) index =

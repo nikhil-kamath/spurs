@@ -1,4 +1,4 @@
 (tests
- (names test_csmat test_csvec)
- (modules test_csmat test_csvec)
+ (names test_ops test_csmat test_csvec)
+ (modules test_ops test_csmat test_csvec)
  (libraries spurs alcotest))

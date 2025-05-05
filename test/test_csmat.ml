@@ -393,7 +393,7 @@ let test_onehot_csc () =
   check csmat "" expected (to_inner_onehot m)
 
 let () =
-  run "Sparse.Csmat"
+  run "Spurs.Csmat"
     [
       ( "check_structure",
         [

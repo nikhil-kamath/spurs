@@ -82,7 +82,7 @@ let fold f (acc : 'acc) (v : 'a t) =
 
 let iter f (v : 'a t) =
   let open Dynarray in
-  for i = 0 to length v.indices do
+  for i = 0 to length v.indices - 1 do
     f v.indices.!(i) v.data.!(i)
   done
 
@@ -99,6 +99,8 @@ let count f (v : 'a t) =
   !c
 
 let is_empty (v : 'a t) = Dynarray.is_empty v.data
+
+let scale c v = map (fun x -> x *. c) v
 
 let append (v : 'a t) ind x =
   let open Dynarray in

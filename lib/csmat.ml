@@ -12,30 +12,6 @@ type 'a t = {
 }
 [@@deriving show, eq]
 
-(** {1 Sparse Matrices} *)
-
-(** In the CSR (Compressed Sparse Row) format, a matrix is represented by three vectors:
-    [indptr], [indices], and [data].
-
-    These vectors satisfy the following relation:
-    {[
-      for i in [0, nrows]:
-        A(i, indices[indptr[i] .. indptr[i + 1]]) = data[indptr[i] .. indptr[i + 1]]
-    ]}
-
-    In the CSC (Compressed Sparse Column) format, the relation becomes:
-    {[
-      for i in [0, ncols]:
-        A(indices[indptr[i] .. indptr[i + 1]], i) = data[indptr[i] .. indptr[i + 1]]
-    ]} *)
-
-let get_storage m = m.storage
-let get_nrows m = m.nrows
-let get_ncols m = m.ncols
-let get_indptr m = m.indptr
-let get_indices m = m.indices
-let get_data m = m.data
-
 let copy m =
   {
     storage = m.storage;
@@ -46,6 +22,12 @@ let copy m =
     data = Dynarray.copy m.data;
   }
 
+let get_storage m = m.storage
+let get_nrows m = m.nrows
+let get_ncols m = m.ncols
+let get_indptr m = m.indptr
+let get_indices m = m.indices
+let get_data m = m.data
 let print_float_matrix m = show Fmt.float m |> print_endline
 let print_int_matrix m = show Fmt.int m |> print_endline
 let other_storage = function CSR -> CSC | CSC -> CSR
@@ -64,16 +46,10 @@ let set_inner_dims (m : 'a t) inner =
 
 let nnz { indptr; _ } = Dynarray.get_last indptr
 
-(* Exception type *)
 exception MatrixException of string
 
 (** {1 Creation Functions} *)
 
-(** Check the structure of [CsMat] components, ensuring:
-    - indptr is of length [outer_dim() + 1]
-    - indices and data have the same length, [nnz == indptr[outer_dims()]]
-    - indices is sorted for each outer slice
-    - indices are lower than [inner_dims()] *)
 let check_structure (inner : int) (outer : int) (indptr : int Dynarray.t)
     (indices : int Dynarray.t) : (unit, string) Result.t =
   let open Dynarray in
@@ -92,8 +68,9 @@ let new_checked_dyn storage shape indptr indices data =
   let nrows, ncols = shape in
   let inner, outer = match storage with CSR -> (ncols, nrows) | CSC -> (nrows, ncols) in
   let ( let* ) = Result.bind in
-  if Dynarray.(length data <> length indices) then
-    Error (Printf.sprintf "data and indices have different sizes")
+  if inner < 0 || outer < 0 then Error "negative shape"
+  else if Dynarray.(length data <> length indices) then
+    Error "data and indices have different sizes"
   else
     let* () = check_structure inner outer indptr indices in
     Ok { storage; nrows; ncols; indptr; indices; data }
@@ -107,30 +84,18 @@ let new_checked storage shape indptr indices data =
 let try_new_csr shape = new_checked CSR shape
 let try_new_csc shape = new_checked CSC shape
 
-(** [new_csr indptr indices data] creates a new CSR matrix. Raises an exception if the
-    inputs do not describe a valid CSR matrix.
-
-    See {!new_csc} for the CSC equivalent. *)
 let new_csr shape indptr indices data =
   match try_new_csr shape indptr indices data with
   | Ok m -> m
   | Error s ->
       raise (MatrixException (Printf.sprintf "Could not create sparse matrix: %s" s))
 
-(** [new_csc indptr indices data] creates a new CSC matrix. Raises an exception if the
-    inputs do not describe a valid CSC matrix.
-
-    See {!new_csr} for the CSR equivalent. *)
 let new_csc shape indptr indices data =
   match try_new_csc shape indptr indices data with
   | Ok m -> m
   | Error s ->
       raise (MatrixException (Printf.sprintf "Could not create sparse matrix: %s" s))
 
-(** Create a new matrix.
-
-    Returns [Some matrix] if the inputs represent a valid sparse matrix, or [None] if the
-    inputs are invalid. *)
 let new_from_unsorted storage shape indptr indices data =
   if Array.(length data <> length indices) then
     Error "data and indices have different sizes"
@@ -143,17 +108,9 @@ let new_from_unsorted storage shape indptr indices data =
           Utils.sort_like_from indices data start stop);
     new_checked_dyn storage shape indptr indices data
 
-(** Try to create a CSR matrix.
-
-    If necessary, the indices will be sorted. *)
 let new_csr_from_unsorted shape = new_from_unsorted CSR shape
-
-(** Try to create a CSC matrix.
-
-    If necessary, the indices will be sorted. *)
 let new_csc_from_unsorted shape = new_from_unsorted CSC shape
 
-(** Iterates through the matrix, calling [f outer inner x] on each element. *)
 let iteroi f (m : 'a t) =
   let open Dynarray in
   Indptr.iter_outeri m.indptr (fun outer start stop ->
@@ -162,6 +119,9 @@ let iteroi f (m : 'a t) =
         let x = m.data.!(i) in
         f outer inner x
       done)
+
+let iterrc f (m : 'a t) =
+  match m.storage with CSR -> iteroi f m | CSC -> iteroi (Fun.flip f) m
 
 (** Create a matrix mathematically equal to this one, but with the opposite storage: CSR →
     CSC, or CSC → CSR. *)
@@ -229,7 +189,6 @@ let transpose (m : 'a t) =
     data = Dynarray.copy m.data;
   }
 
-(** Create a CSR matrix from a dense matrix, ignoring elements lower than [epsilon]. *)
 let csr_from_dense ?(epsilon = 0.00001) m =
   let open Array in
   let nrows = length m in
@@ -256,7 +215,6 @@ let csr_from_dense ?(epsilon = 0.00001) m =
     m;
   { storage = CSR; nrows; ncols; indptr; indices; data }
 
-(** Create a CSC matrix from a dense matrix, ignoring elements less than [epsilon]. *)
 let csc_from_dense ?(epsilon = 0.00001) m =
   let sm = m |> Utils.transpose_array |> csr_from_dense ~epsilon in
   transpose_mut sm;
@@ -264,31 +222,29 @@ let csc_from_dense ?(epsilon = 0.00001) m =
 
 (** {1 Common Matrices} *)
 
-(** Identity matrix, stored as a CSR. *)
 let eye_csr n =
   let indptr = Utils.range (n + 1) in
   let indices = Utils.range n in
   let data = Dynarray.make n 1. in
   { storage = CSR; nrows = n; ncols = n; indptr; indices; data }
 
-(** Identity matrix, stored as a CSC. *)
 let eye_csc n =
   let m = eye_csr n in
   transpose_mut m;
   m
 
-(** Create an empty matrix for building purposes *)
-let empty storage inner_size =
-  let shape = match storage with CSR -> (0, inner_size) | CSC -> (inner_size, 0) in
-  let indptr = [| 0 |] in
-  let indices = [||] in
-  let data = [||] in
-  new_checked storage shape indptr indices data
+let empty storage =
+  {
+    nrows = 0;
+    ncols = 0;
+    storage;
+    indptr = [| 0 |] |> Dynarray.of_array;
+    indices = [||] |> Dynarray.of_array;
+    data = [||] |> Dynarray.of_array;
+  }
 
-(** Create a new CSR matrix representing the zero matrix. *)
 let zero shape =
   let nrows, ncols = shape in
-
   {
     nrows;
     ncols;
@@ -298,92 +254,50 @@ let zero shape =
     data = Dynarray.create ();
   }
 
-(** {1 Matrix Operations} *)
+let scale_inplace c (m : float t) = Utils.map_inplace (fun x -> x *. c) m.data
 
-(** Scale the values in a sparse matrix inplace *)
-let scale_inplace (m : float t) c = Utils.map_inplace (fun x -> x *. c) m.data
-
-(** Return a new sparse matrix, scaled by c *)
-let scale (m : float t) c =
+let scale c (m : float t) =
   let m2 = copy m in
-  scale_inplace m2 c;
+  scale_inplace c m2;
   m2
 
-(** {1 Indexing and Iteration} *)
-
-(** Return the inner vector at outer index [outer]. *)
 let get_outer (m : 'a t) outer =
-  if outer >= outer_dims m then None
+  if outer < 0 || outer >= outer_dims m then None
   else
-    let start, stop = Indptr.outer_inds_sz m.indptr outer in
+    let start, stop = Indptr.outer_start_stop m.indptr outer in
     let len = stop - start in
-    (* TODO: should we make the Array.subs reference copies? *)
     Some
       (Csvec.new_trusted (inner_dims m)
          (Utils.sub m.indices start len |> Dynarray.to_array)
          (Utils.sub m.data start len |> Dynarray.to_array))
 
-(** Same as {!get_outer}, but raises an exception if the outer index is invalid. *)
 let get_outer_exn (m : 'a t) outer = get_outer m outer |> Option.get
 
-(** Calls [f outer v] on each outer dimension, where [v] is the corresponding sparse
-    vector. *)
 let itero f (m : 'a t) =
   for outer = 0 to outer_dims m - 1 do
     f outer (get_outer_exn m outer)
   done
 
-(** Try to find the value at the given outer and inner indices.
-
-    Returns [None] if the indexing is invalid, otherwise returns [Some NNZ index]. *)
-
-let nnz_index_outer_inner m outer inner =
-  let ( let* ) = Option.bind in
-  if outer >= outer_dims m then None
-  else
-    let offset, _ = Indptr.outer_inds_sz m.indptr outer in
-    let* v = get_outer m outer in
-    let* (NNZ index) = Csvec.nnz_index v inner in
-    Some (Nnz_index.NNZ (index + offset))
-
-(** Find the non-zero index of the element specified by row and column.
-
-    This search is logarithmic in the number of non-zeros in the corresponding outer
-    slice. Once available, the [`nnz_index`] type allows retrieval with O(1) complexity.
-
-    Returns [None] if the element is not found, otherwise returns [Some NNZ index]. *)
 let nnz_index (m : 'a t) row col =
-  match m.storage with
-  | CSR -> nnz_index_outer_inner m row col
-  | CSC -> nnz_index_outer_inner m col row
+  let helper m outer inner =
+    if outer < 0 || outer >= outer_dims m then None
+    else
+      let ( let* ) = Option.bind in
+      let offset = Dynarray.get m.indptr outer in
+      let* v = get_outer m outer in
+      let* (NNZ index) = Csvec.nnz_index v inner in
+      Some (Nnz_index.NNZ (index + offset))
+  in
+  match m.storage with CSR -> helper m row col | CSC -> helper m col row
 
-(** Index a sparse matrix using an [Nnz_index.t].
-
-    Raises an exception if the index is out of bounds. *)
 let get_nnz (m : 'a t) (Nnz_index.NNZ i) = Dynarray.get m.data i
-
-(** Reassign an index of a sparse matrix using an [Nnz_index.t].
-
-    Raises an exception if the index is out of bounds. *)
 let set_nnz (m : 'a t) (Nnz_index.NNZ i) v = Dynarray.set m.data i v
 
-(** Index a sparse matrix using row and column.
-
-    Has the same complexity as [nnz_index].
-
-    Returns [None] if the row and column are invalid, otherwise returns [Some value] at
-    that position. *)
 let get m (row, col) =
   let ( let* ) = Option.bind in
   let* i = nnz_index m row col in
   Some (get_nnz m i)
 
-(** Reassign an element using row and column.
-
-    Has the same complexity as [nnz_index].
-
-    Returns [None] if the row and column are invalid, otherwise sets the value at that
-    position. *)
 let set m (row, col) v =
   let ( let* ) = Option.bind in
   let* i = nnz_index m row col in
@@ -427,35 +341,22 @@ let insert_outer_inner m outer inner x =
      add_last m.data x)
    else
      (* search for an insertion spot *)
-     let start, stop = Indptr.outer_inds_sz m.indptr outer in
+     let start, stop = Indptr.outer_start_stop m.indptr outer in
      match Utils.binary_search_from m.indices start stop inner with
      | Ok ind -> m.data.!(ind) <- x
      | Error ind ->
          Utils.insert m.indices ind inner;
          Utils.insert m.data ind x;
          Indptr.record_new_element m.indptr outer);
-  if inner > inner_dims m then set_inner_dims m (inner + 1)
+  if inner >= inner_dims m then set_inner_dims m (inner + 1)
 
-(** Insert an element in the matrix. If the element is already present, its value is
-    overwritten.
-
-    This is not an efficient operation.
-    {b However, it is efficient if the elements are inserted in order} according to the
-    formatting (for example, row-by-row for CSR matrices)
-
-    {i If the index is out of bounds, the matrix will be resized to the necessary size.}
-*)
 let insert (m : 'a t) row col x =
   match m.storage with
   | CSR -> insert_outer_inner m row col x
   | CSC -> insert_outer_inner m col row x
 
-(** {1 Miscellaneous Functions & Nice-To-Haves} *)
-
-(** Returns the density (proportion non-zero) of a matrix *)
 let density (m : 'a t) = float_of_int (nnz m) /. float_of_int (m.nrows * m.ncols)
 
-(** Get the diagonal of a sparse matrix. {i Returns as a sparse vector} *)
 let diag (m : 'a t) =
   let dim = min m.nrows m.ncols in
   let indices = Dynarray.create () in
@@ -469,35 +370,18 @@ let diag (m : 'a t) =
   done;
   Csvec.new_trusted dim (Dynarray.to_array indices) (Dynarray.to_array data)
 
-(** Create a new CSR matrix equivalent to this one. If this is a CSR matrix, it is
-    returned as a value. For a version that copies, see {!to_csr} *)
 let into_csr (m : 'a t) = match m.storage with CSR -> m | CSC -> to_other_storage m
-
-(** Create a new CSR matrix equivalent to this one. If this is a CSR matrix, create a
-    copy. *)
 let to_csr (m : 'a t) = match m.storage with CSR -> copy m | CSC -> to_other_storage m
-
-(** Create a new CSC matrix equivalent to this one. If this is a CSC matrix, it is
-    returned as a value. For a version that copies, see {!to_csc} *)
 let into_csc (m : 'a t) = match m.storage with CSR -> to_other_storage m | CSC -> m
-
-(** Create a new CSC matrix equivalent to this one. If this is a CSC matrix, create a
-    copy. *)
 let to_csc (m : 'a t) = match m.storage with CSR -> to_other_storage m | CSC -> copy m
-
-(** Returns [true] if the input matrix is in CSR format *)
 let is_csr (m : 'a t) = m.storage = CSR
-
-(** Returns [true] if the input matrix is in CSC format *)
 let is_csc (m : 'a t) = m.storage = CSC
 
-(** Returns a new sparse matrix with the elements mapped by [f] *)
 let map f (m : 'a t) =
   let m2 = copy m in
   Utils.map_inplace f m2.data;
   m2
 
-(** Maps [f] over the sparse matrix in-place. *)
 let map_inplace f (m : 'a t) = Utils.map_inplace f m.data
 
 (** Returns the maximum number of nonzeros in each outer dimension *)
@@ -506,19 +390,11 @@ let max_outer_nnz (m : 'a t) =
   Indptr.iter_outer m.indptr (fun start stop -> r := max !r (stop - start));
   !r
 
-(** Converts into a dense matrix. *)
 let to_dense (m : float t) =
   let res = Array.make_matrix m.nrows m.ncols 0. in
-  let assign outer inner x =
-    match m.storage with
-    | CSR -> res.(outer).(inner) <- x
-    | CSC -> res.(inner).(outer) <- x
-  in
-  iteroi (fun outer inner x -> assign outer inner x) m;
+  iterrc (fun row col x -> res.(row).(col) <- x) m;
   res
 
-(** Returns a vector containing the degree of each vertex, ie the number of neighbors of
-    each vertex. We do not count diagonal entries as a neighbor. *)
 let degrees (m : 'a t) =
   let count = Array.make (outer_dims m) 0 in
   iteroi
@@ -526,10 +402,6 @@ let degrees (m : 'a t) =
     m;
   count
 
-(** Generate a one-hot matrix, compressing the inner dimension.
-
-    Returns a matrix with the same size, the same CSR/CSC type, and a single value of 1.0
-    within each {i populated} inner vector. *)
 let to_inner_onehot (m : 'a t) =
   let open Dynarray in
   let indptr_counter = ref 0 in
@@ -559,7 +431,6 @@ let to_inner_onehot (m : 'a t) =
 
   { storage = m.storage; nrows = m.nrows; ncols = m.ncols; indptr; indices; data }
 
-(** Convert this vector into a new matrix with only one column. *)
 let to_col (v : 'a Csvec.t) =
   let indptr = Dynarray.of_array [| 0; Dynarray.length v.indices |] in
   {
@@ -571,7 +442,6 @@ let to_col (v : 'a Csvec.t) =
     data = Dynarray.copy v.data;
   }
 
-(** Convert this vector into a new matrix with only one row. *)
 let to_row (v : 'a Csvec.t) =
   let indptr = Dynarray.of_array [| 0; Dynarray.length v.indices |] in
   {

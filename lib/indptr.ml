@@ -41,7 +41,8 @@ let check_indptr_structure indptr =
   let* () = if not (is_sorted indptr) then error "Indptr should be sorted" else ok () in
   ok ()
 
-let outer_inds_sz (indptr : int Dynarray.t) outer = (indptr.!(outer), indptr.!(outer + 1))
+let outer_start_stop (indptr : int Dynarray.t) outer =
+  (indptr.!(outer), indptr.!(outer + 1))
 
 let record_new_element (indptr : int Dynarray.t) outer =
   for i = outer + 1 to Dynarray.length indptr - 1 do

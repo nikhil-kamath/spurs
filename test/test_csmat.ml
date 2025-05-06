@@ -242,7 +242,7 @@ let test_csc_from_dense () =
   check csmat "Should be equal" m_expected m_sparse
 
 let test_scale () =
-  let m = scale (eye_csr 3) 2. in
+  let m = scale 2. (eye_csr 3) in
   let m_expected = new_csr (3, 3) [| 0; 1; 2; 3 |] [| 0; 1; 2 |] [| 2.; 2.; 2. |] in
   check csmat "Should be equal" m_expected m
 
@@ -302,7 +302,7 @@ let test_insert_no_resize () =
   check csmat "" m_expected m
 
 let test_insert_oob () =
-  let m = empty CSR 1 |> Result.get_ok in
+  let m = empty CSR in
   insert m 0 0 1.;
   insert m 1 1 1.;
   insert m 2 2 1.;

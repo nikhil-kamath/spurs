@@ -324,12 +324,12 @@ let test_density () =
 
 let test_diag () =
   let m = eye_csr 3 in
-  let expected = Csvec.new_trusted 3 [| 0; 1; 2 |] [| 1.; 1.; 1. |] in
+  let expected = Csvec.new_csvec 3 [| 0; 1; 2 |] [| 1.; 1.; 1. |] in
   check csvec "" expected (diag m)
 
 let test_diag_2 () =
   let m = csr_from_dense [| [| 0.; 0.; 0. |]; [| 0.; 1.; 0. |]; [| 0.; 0.; 0. |] |] in
-  let expected = Csvec.new_trusted 3 [| 1 |] [| 1. |] in
+  let expected = Csvec.new_csvec 3 [| 1 |] [| 1. |] in
   check csvec "" expected (diag m)
 
 let test_map () =

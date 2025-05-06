@@ -120,7 +120,7 @@ val eye_csr : int -> float t
 val eye_csc : int -> float t
 (** [eye_csc n] creates the n x n matrix, compressed in CSC format. *)
 
-(** {1 Iteration and traversal}*)
+(** {1 Iteration and Traversal}*)
 
 val iteroi : (int -> int -> 'a -> unit) -> 'a t -> unit
 (** [iteroi f m] iterates through [m], calling [f outer inner x] on each element.

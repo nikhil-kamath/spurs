@@ -48,8 +48,6 @@ let nnz { indptr; _ } = Dynarray.get_last indptr
 
 exception MatrixException of string
 
-(** {1 Creation Functions} *)
-
 let check_structure (inner : int) (outer : int) (indptr : int Dynarray.t)
     (indices : int Dynarray.t) : (unit, string) Result.t =
   let open Dynarray in
@@ -123,8 +121,6 @@ let iteroi f (m : 'a t) =
 let iterrc f (m : 'a t) =
   match m.storage with CSR -> iteroi f m | CSC -> iteroi (Fun.flip f) m
 
-(** Create a matrix mathematically equal to this one, but with the opposite storage: CSR →
-    CSC, or CSC → CSR. *)
 let to_other_storage m =
   let open Dynarray in
   let indptr = make (inner_dims m + 1) 0 in
@@ -167,18 +163,12 @@ let to_other_storage m =
     data;
   }
 
-(** Transpose a matrix in-place.
-
-    Does not create a new matrix! *)
 let transpose_mut (m : 'a t) =
   m.storage <- other_storage m.storage;
   let nrows, ncols = (m.nrows, m.ncols) in
   m.nrows <- ncols;
   m.ncols <- nrows
 
-(** Return the transpose of this matrix, in the other format.
-
-    Does not modify the original matrix. *)
 let transpose (m : 'a t) =
   {
     storage = other_storage m.storage;
@@ -219,8 +209,6 @@ let csc_from_dense ?(epsilon = 0.00001) m =
   let sm = m |> Utils.transpose_array |> csr_from_dense ~epsilon in
   transpose_mut sm;
   sm
-
-(** {1 Common Matrices} *)
 
 let eye_csr n =
   let indptr = Utils.range (n + 1) in
@@ -267,9 +255,12 @@ let get_outer (m : 'a t) outer =
     let start, stop = Indptr.outer_start_stop m.indptr outer in
     let len = stop - start in
     Some
-      (Csvec.new_trusted (inner_dims m)
-         (Utils.sub m.indices start len |> Dynarray.to_array)
-         (Utils.sub m.data start len |> Dynarray.to_array))
+      Csvec.
+        {
+          dim = inner_dims m;
+          indices = Utils.sub m.indices start len;
+          data = Utils.sub m.data start len;
+        }
 
 let get_outer_exn (m : 'a t) outer = get_outer m outer |> Option.get
 
@@ -308,12 +299,6 @@ let ( .!!()<- ) m i v = set_nnz m i v
 let ( .@() ) m rc = get m rc
 let ( .@()<- ) m rc v = set m rc v |> Option.get (* Should this return the option? *)
 
-(** {1 Modifying and building matrices} *)
-
-(** Append an outer dimension to an existing matrix, extending the size of the outer
-    dimension by one.
-
-    Raises an exception if the vector to add does not have compatible dimension. *)
 let append_outer ?(epsilon = 0.000001) (m : 'a t) (v : 'a array) =
   if Array.length v <> inner_dims m then
     raise (MatrixException "Trying to append improperly sized vector");
@@ -368,7 +353,7 @@ let diag (m : 'a t) =
         Dynarray.add_last data x
     | None -> ()
   done;
-  Csvec.new_trusted dim (Dynarray.to_array indices) (Dynarray.to_array data)
+  Csvec.{ dim; indices; data }
 
 let into_csr (m : 'a t) = match m.storage with CSR -> m | CSC -> to_other_storage m
 let to_csr (m : 'a t) = match m.storage with CSR -> copy m | CSC -> to_other_storage m
@@ -384,7 +369,6 @@ let map f (m : 'a t) =
 
 let map_inplace f (m : 'a t) = Utils.map_inplace f m.data
 
-(** Returns the maximum number of nonzeros in each outer dimension *)
 let max_outer_nnz (m : 'a t) =
   let r = ref 0 in
   Indptr.iter_outer m.indptr (fun start stop -> r := max !r (stop - start));

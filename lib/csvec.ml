@@ -96,7 +96,6 @@ let count f (v : 'a t) =
   !c
 
 let is_empty (v : 'a t) = Dynarray.is_empty v.data
-
 let scale c v = map (fun x -> x *. c) v
 
 let append (v : 'a t) ind x =

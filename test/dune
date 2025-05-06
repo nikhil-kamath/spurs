@@ -1,4 +1,4 @@
 (tests
- (names test_ops test_csmat test_csvec)
- (modules test_ops test_csmat test_csvec generators)
+ (names test_ops test_csmat test_csvec prop_ops prop_csmat)
+ (modules test_ops test_csmat test_csvec prop_ops prop_csmat generators)
  (libraries spurs alcotest qcheck qcheck-alcotest))

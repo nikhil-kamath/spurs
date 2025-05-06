@@ -179,48 +179,6 @@ let transpose (m : 'a t) =
     data = Dynarray.copy m.data;
   }
 
-let csr_from_dense ?(epsilon = 0.00001) m =
-  let open Array in
-  let nrows = length m in
-  let ncols = length m.(0) in
-  let indptr = Dynarray.make (nrows + 1) 0 in
-  let nnz = ref 0 in
-  iteri
-    (fun i row ->
-      iter (fun x -> if abs_float x > epsilon then incr nnz) row;
-      Dynarray.set indptr (i + 1) !nnz)
-    m;
-  let indices = Dynarray.make !nnz 0 in
-  let data = Dynarray.make !nnz 0. in
-  let dest = ref 0 in
-  iter
-    (fun row ->
-      iteri
-        (fun col x ->
-          if abs_float x > epsilon then (
-            Dynarray.set indices !dest col;
-            Dynarray.set data !dest x;
-            incr dest))
-        row)
-    m;
-  { storage = CSR; nrows; ncols; indptr; indices; data }
-
-let csc_from_dense ?(epsilon = 0.00001) m =
-  let sm = m |> Utils.transpose_array |> csr_from_dense ~epsilon in
-  transpose_mut sm;
-  sm
-
-let eye_csr n =
-  let indptr = Utils.range (n + 1) in
-  let indices = Utils.range n in
-  let data = Dynarray.make n 1. in
-  { storage = CSR; nrows = n; ncols = n; indptr; indices; data }
-
-let eye_csc n =
-  let m = eye_csr n in
-  transpose_mut m;
-  m
-
 let empty storage =
   {
     nrows = 0;
@@ -241,6 +199,47 @@ let zero shape =
     indices = Dynarray.create ();
     data = Dynarray.create ();
   }
+
+let csr_from_dense ?(epsilon = 0.00001) m =
+  let open Array in
+  if length m = 0 then empty CSR
+  else
+    let nrows = length m in
+    let ncols = length m.(0) in
+    let indptr = Dynarray.make (nrows + 1) 0 in
+    let nnz = ref 0 in
+    iteri
+      (fun i row ->
+        iter (fun x -> if abs_float x > epsilon then incr nnz) row;
+        Dynarray.set indptr (i + 1) !nnz)
+      m;
+    let indices = Dynarray.make !nnz 0 in
+    let data = Dynarray.make !nnz 0. in
+    let dest = ref 0 in
+    iter
+      (fun row ->
+        iteri
+          (fun col x ->
+            if abs_float x > epsilon then (
+              Dynarray.set indices !dest col;
+              Dynarray.set data !dest x;
+              incr dest))
+          row)
+      m;
+    { storage = CSR; nrows; ncols; indptr; indices; data }
+
+let csc_from_dense ?(epsilon = 0.00001) m = csr_from_dense ~epsilon m |> to_other_storage
+
+let eye_csr n =
+  let indptr = Utils.range (n + 1) in
+  let indices = Utils.range n in
+  let data = Dynarray.make n 1. in
+  { storage = CSR; nrows = n; ncols = n; indptr; indices; data }
+
+let eye_csc n =
+  let m = eye_csr n in
+  transpose_mut m;
+  m
 
 let scale_inplace c (m : float t) = Utils.map_inplace (fun x -> x *. c) m.data
 

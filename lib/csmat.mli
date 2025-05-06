@@ -1,10 +1,5 @@
 (** {1 Compression Formats}*)
 
-(** {b Creation directly from these formats requires knowledge of the underlying
-       compression in CSR/CSC matrices.}
-
-    For an easier experience, use the (WIP) {!Cstri} module. *)
-
 (** Compressed Sparse Row (CSR) vs Compressed Sparse Column (CSC) formats.
 
     They are explained in more detail in {!t} *)
@@ -44,6 +39,11 @@ exception MatrixException of string
 (** Raised when trying to create invalid sparse matrices. *)
 
 (** {1 Raw Creation Functions} *)
+
+(** {2 Creation directly from these formats requires knowledge of the underlying
+    compression in CSR/CSC matrices.}
+
+    For an easier experience, use the (WIP) {!Cstri} module. *)
 
 val try_new_csr : int * int -> int array -> int array -> 'a array -> ('a t, string) result
 (** [try_new_csr (rows, cols) indptr indices data] attempts to create a new CSR matrix. It

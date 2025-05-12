@@ -10,7 +10,7 @@ type 'a t = {
   indices : int Dynarray.t;
   data : 'a Dynarray.t;
 }
-[@@deriving show, eq]
+[@@deriving show]
 
 let copy m =
   {
@@ -31,6 +31,12 @@ let get_data m = m.data
 let print_float_matrix m = show Fmt.float m |> print_endline
 let print_int_matrix m = show Fmt.int m |> print_endline
 let other_storage = function CSR -> CSC | CSC -> CSR
+
+let equal f m m' =
+  m.storage = m'.storage && m.nrows = m'.nrows && m.ncols = m'.ncols
+  && Dynarray.equal ( = ) m.indptr m'.indptr
+  && Dynarray.equal ( = ) m.indices m'.indices
+  && Dynarray.equal f m.data m'.data
 
 let inner_dims { storage; nrows; ncols; _ } =
   match storage with CSC -> nrows | CSR -> ncols
@@ -317,7 +323,7 @@ let insert_outer_inner m outer inner x =
   let outer_dims = outer_dims m in
   (if outer >= outer_dims then (
      (* adding enough new outer dimensions *)
-     let last_nnz = if length m.indptr > 0 then get_last m.indptr else 0 in
+     let last_nnz = get_last m.indptr in
      append_array m.indptr (Array.make (outer - outer_dims) last_nnz);
      set_outer_dims m (outer + 1);
      add_last m.indptr (last_nnz + 1);
@@ -335,9 +341,22 @@ let insert_outer_inner m outer inner x =
   if inner >= inner_dims m then set_inner_dims m (inner + 1)
 
 let insert (m : 'a t) row col x =
+  if row < 0 || col < 0 then raise (MatrixException "negative index insert");
   match m.storage with
   | CSR -> insert_outer_inner m row col x
   | CSC -> insert_outer_inner m col row x
+
+let expand m rows cols =
+  let open Dynarray in
+  if rows < m.nrows || cols < m.ncols then
+    raise (MatrixException "expanding to smaller dimensions");
+  let outer = match m.storage with CSR -> rows | CSC -> cols in
+  let outer_dims = outer_dims m in
+  (if outer >= outer_dims then
+     let last_nnz = get_last m.indptr in
+     append_array m.indptr (Array.make (outer - outer_dims) last_nnz));
+  m.nrows <- rows;
+  m.ncols <- cols
 
 let density (m : 'a t) = float_of_int (nnz m) /. float_of_int (m.nrows * m.ncols)
 

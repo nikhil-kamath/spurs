@@ -239,6 +239,12 @@ val insert : 'a t -> int -> int -> 'a -> unit
     {i If the index is out of bounds, the matrix will be resized to the necessary size.}
 *)
 
+val expand : 'a t -> int -> int -> unit
+(** [expand m rows cols] expands [m] to have [rows] rows and [cols] columns, padding with
+    compressed zeroes.
+
+    Raises [MatrixException] if [rows] or [cols] are smaller than their current values. *)
+
 val transpose_mut : 'a t -> unit
 (** [transpose_mut m] converts [m] to its mathematical transpose in-place. Converts CSR
     matrices to CSC and vise-versa. This is a cheap operation.

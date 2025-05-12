@@ -3,6 +3,7 @@ open Spurs.Ops
 open Alcotest
 
 let csvec = testable (Fmt.of_to_string (Csvec.show Fmt.float)) (Csvec.equal ( = ))
+let csmat = testable (Fmt.of_to_string (Csmat.show Fmt.float)) (Csmat.equal ( = ))
 
 let test_v_add () =
   let v1 = [| 0.; 0.; 1.; 1.; 0.; 1. |] |> Csvec.of_dense in
@@ -31,6 +32,16 @@ let test_dot_normalize () =
   let v = [| 0.; 0.; 1.; 3.; 0.; 1. |] |> Csvec.of_dense in
   check (float 0.000001) "" (Csvec.squared_l2_norm v) (dot_v v v)
 
+let test_mult () =
+  let open Csmat in
+  let a =
+    [| [| 0.0; 0.0; 2.0; 0.0 |]; [| 0.0; 0.0; 3.0; 4.0 |]; [| 5.0; 0.0; 0.0; 0.0 |] |]
+    |> csr_from_dense
+  in
+  let b = [| [| 0.0; 6.0 |]; [| 0.0; 0.0 |]; [| 7.0; 0.0 |]; [| 0.0; 8.0 |] |] |> csc_from_dense in
+  let expected = [| [| 14.0; 0.0 |]; [| 21.0; 32.0 |]; [| 0.0; 30.0 |] |] |> csr_from_dense in
+  check csmat "" expected (mult a b)
+
 let () =
   run "Spurs.Ops"
     [
@@ -42,4 +53,5 @@ let () =
           test_case "Dot product, mismatched lengths" `Quick test_v_dot_mismatch;
           test_case "Self dot product" `Quick test_dot_normalize;
         ] );
+      ("Matrix-Matrix operations", [ test_case "Multiply" `Quick test_mult ]);
     ]

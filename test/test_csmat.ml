@@ -2,8 +2,8 @@ open Spurs
 open Spurs.Csmat
 open Alcotest
 
-let csmat_int = testable (Fmt.of_to_string (show Fmt.int)) (Csmat.equal ( = ))
 let csmat = testable (Fmt.of_to_string (show Fmt.float)) (Csmat.equal ( = ))
+let csmat_int = testable (Fmt.of_to_string (show Fmt.int)) (Csmat.equal ( = ))
 let csmat_result = result csmat string
 let csvec = testable (Fmt.of_to_string (Csvec.show Fmt.float)) (Csvec.equal ( = ))
 let nnz_index_testable = testable (Fmt.of_to_string Common.Nnz_index.show) Common.Nnz_index.equal
@@ -306,7 +306,7 @@ let test_insert_oob () =
   insert m 0 0 1.;
   insert m 1 1 1.;
   insert m 2 2 1.;
-  check csmat "" m (eye_csr 3)
+  check csmat "" (eye_csr 3) m
 
 let test_insert_formats () =
   let m =

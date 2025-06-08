@@ -12,7 +12,8 @@ let fold_outeri (indptr : int Dynarray.t) f x =
 let fold_outer (indptr : int Dynarray.t) f x =
   fold_outeri indptr (fun _ start stop acc -> f start stop acc) x
 
-(* Iterate over outer dimension, giving start and end indices, as well as outer dimension *)
+(** Iterate over outer dimension, giving start and end indices, as well as outer dimension
+*)
 let iter_outeri (indptr : int Dynarray.t) f =
   fold_outeri indptr (fun i s e _ -> f i s e) ()
 

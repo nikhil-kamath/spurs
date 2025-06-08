@@ -31,6 +31,13 @@ let test_from_unsorted () =
   check bool "Should be valid" true (Result.is_ok v);
   check csvec "" expected (Result.get_ok v)
 
+let test_of_dense () =
+  let a = [| 0.; 0.; 1e-7; 1.; 2.; 0.; 3.; 0.; 0. |] in
+  let indices = [| 3; 4; 6 |] in
+  let data = [| 1.; 2.; 3. |] in
+  let expected = new_csvec (Array.length a) indices data in
+  check csvec "" expected (of_dense a)
+
 let test_append () =
   let v = new_csvec 5 [| 0; 1; 2 |] [| 0.; 0.; 0. |] in
   let expected = new_csvec 5 [| 0; 1; 2; 3 |] [| 0.; 0.; 0.; 0. |] in
@@ -107,7 +114,7 @@ let test_normalize () =
   check (float 0.00001) "" 0. (l2_norm v -. 1.)
 
 let () =
-  run "Sparse.Csvec"
+  run "Spurs.Csvec"
     [
       ( "new",
         [
@@ -115,6 +122,7 @@ let () =
           test_case "Invalid, mismatched dimensions" `Quick test_invalid_mismatch;
           test_case "Invalid, out of bounds" `Quick test_invalid_oob;
           test_case "Valid, from sorted" `Quick test_from_unsorted;
+          test_case "Of dense" `Quick test_of_dense;
         ] );
       ( "modifications",
         [

@@ -1,10 +1,5 @@
 (** {1 Compression Formats}*)
 
-(** {b Creation directly from these formats requires knowledge of the underlying
-       compression in CSR/CSC matrices.}
-
-    For an easier experience, use the (WIP) {!Cstri} module. *)
-
 (** Compressed Sparse Row (CSR) vs Compressed Sparse Column (CSC) formats.
 
     They are explained in more detail in {!t} *)
@@ -44,6 +39,11 @@ exception MatrixException of string
 (** Raised when trying to create invalid sparse matrices. *)
 
 (** {1 Raw Creation Functions} *)
+
+(** {2 Creation directly from these formats requires knowledge of the underlying
+    compression in CSR/CSC matrices.}
+
+    For an easier experience, use the (WIP) {!Cstri} module. *)
 
 val try_new_csr : int * int -> int array -> int array -> 'a array -> ('a t, string) result
 (** [try_new_csr (rows, cols) indptr indices data] attempts to create a new CSR matrix. It
@@ -218,6 +218,14 @@ val to_other_storage : 'a t -> 'a t
 val to_dense : float t -> float array array
 (** [to_dense m] converts m into a dense matrix. *)
 
+val append : 'a t -> 'a Csvec.t -> unit
+(** [append m v] appends [v] as a new outer dimension to [m], extending the size of the
+    outer dimension by one. This is adding a new row to CSR matrices, and a new column to
+    CSC matrices.
+
+    Raises an exception if the [v.dim] does not have the same size as the inner dimension
+    of [m]. *)
+
 val append_outer : ?epsilon:float -> float t -> float array -> unit
 (** [append_outer ~epsilon m v] appends [v] as a new outer dimension to [m], extending the
     size of the outer dimension by one. This is adding a new row to CSR matrices, and a
@@ -238,6 +246,12 @@ val insert : 'a t -> int -> int -> 'a -> unit
 
     {i If the index is out of bounds, the matrix will be resized to the necessary size.}
 *)
+
+val expand : 'a t -> int -> int -> unit
+(** [expand m rows cols] expands [m] to have [rows] rows and [cols] columns, padding with
+    compressed zeroes.
+
+    Raises [MatrixException] if [rows] or [cols] are smaller than their current values. *)
 
 val transpose_mut : 'a t -> unit
 (** [transpose_mut m] converts [m] to its mathematical transpose in-place. Converts CSR

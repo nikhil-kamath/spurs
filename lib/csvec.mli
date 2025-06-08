@@ -32,6 +32,10 @@ val new_from_unsorted : int -> int array -> 'a array -> ('a t, string) result
 
 (** {1 Common Creation Functions}*)
 
+val of_dense : ?epsilon:float -> float array -> float t
+(** [of_dense ~epsilon arr] creates a sparse vector from [arr], ignoring elements less
+    than [epsilon] *)
+
 val empty : int -> 'a t
 (** [empty dim] creates an empty vector of dimension [dim] for building purposes. *)
 
@@ -52,6 +56,9 @@ val map_inplace : ('a -> 'a) -> 'a t -> unit
 
 val count : ('a -> bool) -> 'a t -> int
 (** [count pred v] counts the number of elements in [v] that make [pred x] return true. *)
+
+val scale : float -> float t -> float t
+(** [scale c v] returns a new vector with data scaled by [c] *)
 
 (** {1 Indexing}*)
 

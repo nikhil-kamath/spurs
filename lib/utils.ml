@@ -112,9 +112,13 @@ let transpose_dynarray matrix =
 (** Returns the transpose of a 2D Array *)
 let transpose_array matrix =
   let open Array in
-  let rows = length matrix in
-  let cols = if rows = 0 then 0 else length matrix.(0) in
-  init cols (fun j -> init rows (fun i -> matrix.(i).(j)))
+  match matrix with
+  | [||] -> [||]
+  | [| [||] |] -> [| [||] |]
+  | matrix ->
+      let rows = length matrix in
+      let cols = length matrix.(0) in
+      init cols (fun j -> init rows (fun i -> matrix.(i).(j)))
 
 (** Returns the identity of nxn *)
 let eye n = Array.init_matrix n n (fun i j -> if i = j then 1. else 0.)

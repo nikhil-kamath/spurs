@@ -10,7 +10,7 @@ type 'a t = {
   indices : int Dynarray.t;
   data : 'a Dynarray.t;
 }
-[@@deriving show, eq]
+[@@deriving show]
 
 let copy m =
   {
@@ -31,6 +31,12 @@ let get_data m = m.data
 let print_float_matrix m = show Fmt.float m |> print_endline
 let print_int_matrix m = show Fmt.int m |> print_endline
 let other_storage = function CSR -> CSC | CSC -> CSR
+
+let equal f m m' =
+  m.storage = m'.storage && m.nrows = m'.nrows && m.ncols = m'.ncols
+  && Dynarray.equal ( = ) m.indptr m'.indptr
+  && Dynarray.equal ( = ) m.indices m'.indices
+  && Dynarray.equal f m.data m'.data
 
 let inner_dims { storage; nrows; ncols; _ } =
   match storage with CSC -> nrows | CSR -> ncols
@@ -179,48 +185,6 @@ let transpose (m : 'a t) =
     data = Dynarray.copy m.data;
   }
 
-let csr_from_dense ?(epsilon = 0.00001) m =
-  let open Array in
-  let nrows = length m in
-  let ncols = length m.(0) in
-  let indptr = Dynarray.make (nrows + 1) 0 in
-  let nnz = ref 0 in
-  iteri
-    (fun i row ->
-      iter (fun x -> if abs_float x > epsilon then incr nnz) row;
-      Dynarray.set indptr (i + 1) !nnz)
-    m;
-  let indices = Dynarray.make !nnz 0 in
-  let data = Dynarray.make !nnz 0. in
-  let dest = ref 0 in
-  iter
-    (fun row ->
-      iteri
-        (fun col x ->
-          if abs_float x > epsilon then (
-            Dynarray.set indices !dest col;
-            Dynarray.set data !dest x;
-            incr dest))
-        row)
-    m;
-  { storage = CSR; nrows; ncols; indptr; indices; data }
-
-let csc_from_dense ?(epsilon = 0.00001) m =
-  let sm = m |> Utils.transpose_array |> csr_from_dense ~epsilon in
-  transpose_mut sm;
-  sm
-
-let eye_csr n =
-  let indptr = Utils.range (n + 1) in
-  let indices = Utils.range n in
-  let data = Dynarray.make n 1. in
-  { storage = CSR; nrows = n; ncols = n; indptr; indices; data }
-
-let eye_csc n =
-  let m = eye_csr n in
-  transpose_mut m;
-  m
-
 let empty storage =
   {
     nrows = 0;
@@ -241,6 +205,47 @@ let zero shape =
     indices = Dynarray.create ();
     data = Dynarray.create ();
   }
+
+let csr_from_dense ?(epsilon = 0.00001) m =
+  let open Array in
+  if length m = 0 then empty CSR
+  else
+    let nrows = length m in
+    let ncols = length m.(0) in
+    let indptr = Dynarray.make (nrows + 1) 0 in
+    let nnz = ref 0 in
+    iteri
+      (fun i row ->
+        iter (fun x -> if abs_float x > epsilon then incr nnz) row;
+        Dynarray.set indptr (i + 1) !nnz)
+      m;
+    let indices = Dynarray.make !nnz 0 in
+    let data = Dynarray.make !nnz 0. in
+    let dest = ref 0 in
+    iter
+      (fun row ->
+        iteri
+          (fun col x ->
+            if abs_float x > epsilon then (
+              Dynarray.set indices !dest col;
+              Dynarray.set data !dest x;
+              incr dest))
+          row)
+      m;
+    { storage = CSR; nrows; ncols; indptr; indices; data }
+
+let csc_from_dense ?(epsilon = 0.00001) m = csr_from_dense ~epsilon m |> to_other_storage
+
+let eye_csr n =
+  let indptr = Utils.range (n + 1) in
+  let indices = Utils.range n in
+  let data = Dynarray.make n 1. in
+  { storage = CSR; nrows = n; ncols = n; indptr; indices; data }
+
+let eye_csc n =
+  let m = eye_csr n in
+  transpose_mut m;
+  m
 
 let scale_inplace c (m : float t) = Utils.map_inplace (fun x -> x *. c) m.data
 
@@ -299,26 +304,27 @@ let ( .!!()<- ) m i v = set_nnz m i v
 let ( .@() ) m rc = get m rc
 let ( .@()<- ) m rc v = set m rc v |> Option.get (* Should this return the option? *)
 
-let append_outer ?(epsilon = 0.000001) (m : 'a t) (v : 'a array) =
-  if Array.length v <> inner_dims m then
+let append (m : 'a t) (v : 'a Csvec.t) =
+  if v.dim <> inner_dims m then
     raise (MatrixException "Trying to append improperly sized vector");
-  let nnz = ref (nnz m) in
-  Array.iteri
+  Csvec.iter
     (fun i x ->
-      if abs_float x >= epsilon then (
-        Dynarray.add_last m.indices i;
-        Dynarray.add_last m.data x;
-        incr nnz))
+      Dynarray.add_last m.indices i;
+      Dynarray.add_last m.data x)
     v;
-  Dynarray.add_last m.indptr !nnz;
+  Dynarray.add_last m.indptr (nnz m + Csvec.nnz v);
   match m.storage with CSR -> m.nrows <- m.nrows + 1 | CSC -> m.ncols <- m.ncols + 1
+
+let append_outer ?(epsilon = 0.000001) (m : 'a t) (v : 'a array) =
+  let v = Csvec.of_dense ~epsilon v in
+  append m v
 
 let insert_outer_inner m outer inner x =
   let open Dynarray in
   let outer_dims = outer_dims m in
   (if outer >= outer_dims then (
      (* adding enough new outer dimensions *)
-     let last_nnz = if length m.indptr > 0 then get_last m.indptr else 0 in
+     let last_nnz = get_last m.indptr in
      append_array m.indptr (Array.make (outer - outer_dims) last_nnz);
      set_outer_dims m (outer + 1);
      add_last m.indptr (last_nnz + 1);
@@ -336,9 +342,22 @@ let insert_outer_inner m outer inner x =
   if inner >= inner_dims m then set_inner_dims m (inner + 1)
 
 let insert (m : 'a t) row col x =
+  if row < 0 || col < 0 then raise (MatrixException "negative index insert");
   match m.storage with
   | CSR -> insert_outer_inner m row col x
   | CSC -> insert_outer_inner m col row x
+
+let expand m rows cols =
+  let open Dynarray in
+  if rows < m.nrows || cols < m.ncols then
+    raise (MatrixException "expanding to smaller dimensions");
+  let outer = match m.storage with CSR -> rows | CSC -> cols in
+  let outer_dims = outer_dims m in
+  (if outer >= outer_dims then
+     let last_nnz = get_last m.indptr in
+     append_array m.indptr (Array.make (outer - outer_dims) last_nnz));
+  m.nrows <- rows;
+  m.ncols <- cols
 
 let density (m : 'a t) = float_of_int (nnz m) /. float_of_int (m.nrows * m.ncols)
 

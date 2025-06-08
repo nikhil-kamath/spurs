@@ -10,27 +10,16 @@ let elem_gen density =
 
 let indices_gen_sized n =
   let open QCheck2.Gen in
-  shuffle_l (List.init (n * 10) Fun.id) >|= List.take n >|= List.sort compare
+  shuffle_l (List.init (n * 10) Fun.id) >|= List.take n >|= List.sort compare >|= Array.of_list
 
 let data_gen_sized n =
   let open QCheck2.Gen in
   let* density = float_bound_inclusive 1. in
-  list_repeat n (elem_gen density)
+  array_repeat n (elem_gen density)
 
-let vec_gen =
-  let open QCheck2.Gen in
-  sized data_gen_sized >|= Array.of_list
-
-let csvec_gen =
-  QCheck2.Gen.(
-    sized (fun n ->
-        let n = n + 1 in
-        let* indices = indices_gen_sized n >|= Dynarray.of_list in
-        let* data = data_gen_sized n >|= Dynarray.of_list in
-        let* gap = 1 -- 3 in
-        let dim = Dynarray.get_last indices + gap in
-        return Csvec.{ dim; indices; data }))
-
+let vec_gen = QCheck2.Gen.sized data_gen_sized
+let x = List.sort
+let csvec_gen = QCheck2.Gen.(sized (fun n -> data_gen_sized n >|= Csvec.of_dense))
 let csvec_print = Csvec.show Fmt.float
 let csmat_print = Csmat.show Fmt.float
 

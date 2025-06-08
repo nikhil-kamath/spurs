@@ -37,6 +37,11 @@ let prop_identity =
       let i = Csmat.eye_csc m.ncols in
       m === mult ~storage:m.storage m i)
 
+let prop_zero =
+  prop_csmat "a * 0 = 0" (fun m ->
+      let z = Csmat.zero (m.ncols, 10) |> Csmat.into_csc in
+      m *@ z === Csmat.zero (m.nrows, 10))
+
 let prop_assoc =
   QCheck2.(
     Test.make ~name:"(a * b) * c = a * (b * c)" ~count:1_000
@@ -47,10 +52,33 @@ let prop_assoc =
         a *@ b *@ c === a *@ (b *@ c)))
   |> to_alcotest
 
+let prop_distrib_left =
+  QCheck2.(
+    Test.make ~name:"a * (b + c) = a * b + a * c" ~count:10_000
+      ~print:(Print.triple csmat_print csmat_print csmat_print)
+      (Gen.triple csmat_gen csmat_gen csmat_gen) (fun (a, b, c) ->
+        assume (a.ncols = b.nrows);
+        assume (b.nrows = c.nrows);
+        assume (b.ncols = c.ncols);
+        a *@ (b +@ c) === (a *@ b) +@ (a *@ c)))
+  |> to_alcotest
+
+let prop_distrib_right =
+  QCheck2.(
+    Test.make ~name:"(b + c) * a = b * a + c * a" ~count:10_000
+      ~print:(Print.triple csmat_print csmat_print csmat_print)
+      (Gen.triple csmat_gen csmat_gen csmat_gen) (fun (a, b, c) ->
+        assume (a.nrows = b.ncols);
+        assume (b.nrows = c.nrows);
+        assume (b.ncols = c.ncols);
+        (b +@ c) *@ a === (b *@ a) +@ (c *@ a)))
+  |> to_alcotest
+
 let () =
   run "Spurs.Ops.Props"
     [
       ( "vector operation properties",
         [ prop_dot_self; prop_plus_minus; prop_plus_plus; prop_to_from_dense ] );
-      ("matrix operation properties", [ prop_identity; prop_assoc ]);
+      ( "matrix operation properties",
+        [ prop_identity; prop_zero; prop_assoc; prop_distrib_left; prop_distrib_right ] );
     ]

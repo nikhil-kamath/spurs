@@ -47,7 +47,7 @@ let fm_v f = fmi_v (fun acc _ a b -> f acc a b)
 (** Adds two sparse vectors, returning the result as a new vector.
 
     Raises an exception if the vectors have different dimensions. *)
-let add_v (v1 : float Csvec.t) (v2 : float Csvec.t) =
+let add_v ?(epsilon = 0.000001) (v1 : float Csvec.t) (v2 : float Csvec.t) =
   if v1.dim <> v2.dim then raise (OpException "adding two different-dimension vectors")
   else
     let open Dynarray in
@@ -56,9 +56,12 @@ let add_v (v1 : float Csvec.t) (v2 : float Csvec.t) =
     fni_v
       (* ignore accumulator *)
       (fun () i a b ->
-        add_last indices i;
-        add_last data (a +. b))
+        let sum = a +. b in
+        if sum >= epsilon then (
+          add_last indices i;
+          add_last data sum))
       (fun () i x ->
+        (* don't need to check against epsilon here *)
         add_last indices i;
         add_last data x)
       () v1 v2;
@@ -70,6 +73,8 @@ let dot_v (v1 : float Csvec.t) (v2 : float Csvec.t) =
     raise (OpException "dot-product of two different-dimension vectors")
   else fm_v (fun acc a b -> acc +. (a *. b)) 0. v1 v2
 
+(** Calculates the matrix product of two sparse matrices, ignoring elements less than
+    [epsilon] *)
 let mult ?(epsilon = 0.000001) ?(storage = Csmat.CSR) (m1 : float Csmat.t)
     (m2 : float Csmat.t) =
   (* ensure m1 is CSR and m2 is CSC *)
@@ -78,21 +83,41 @@ let mult ?(epsilon = 0.000001) ?(storage = Csmat.CSR) (m1 : float Csmat.t)
   let m2 = into_csc m2 in
   (* if not (is_csr m1 && is_csc m2) then
     raise (MatrixException "multiplying invalid formats"); *)
-  if m1.ncols <> m2.nrows then raise (MatrixException "multiplying invalid dimensions");
+  if m1.ncols <> m2.nrows then raise (OpException "multiplying invalid dimensions");
 
   (*  TODO: make this generate the output in cstri or compressed format instead of dense *)
+  (*  TODO: using `itero` creates copies of each row consuming O(x) memory. We can make another function using the old iteration *)
   let out = empty storage in
-  Indptr.iter_outeri m1.indptr (fun row row_start row_stop ->
-      Indptr.iter_outeri m2.indptr (fun col col_start col_stop ->
-          let ip =
-            fmft
-              (fun acc l r -> acc +. (l *. r))
-              m1.indices m1.data m2.indices m2.data row_start row_stop col_start col_stop
-              0.
-          in
-
-          if ip >= epsilon then insert out row col ip));
+  itero
+    (fun r row ->
+      itero
+        (fun c col ->
+          let ip = dot_v row col in
+          if ip >= epsilon then insert out r c ip)
+        m2)
+    m1;
   expand out m1.nrows m2.ncols;
   out
 
 let ( *@ ) = mult
+
+(** Calculates the sum of two sparse matrices, ignoring elements less than [epsilon] *)
+let add ?(epsilon = 0.000001) ?(storage = Csmat.CSR) (m1 : float Csmat.t)
+    (m2 : float Csmat.t) =
+  let open Csmat in
+  (* TODO: can we keep the matrices in their original formats? *)
+  let m1 = into_csr m1 in
+  let m2 = into_csr m2 in
+  if m1.nrows <> m2.nrows || m1.ncols <> m2.ncols then
+    raise (OpException "adding invalid dimensions");
+
+  let out = empty CSR in
+  out.ncols <- m1.ncols;
+  itero
+    (fun r row ->
+      let row2 = get_outer_exn m2 r in
+      append out (add_v ~epsilon row row2))
+    m1;
+  if storage = CSR then out else into_csc out
+
+let ( +@ ) = add

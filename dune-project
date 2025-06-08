@@ -25,7 +25,9 @@
   ppx_deriving
   ppx_fields_conv
   fmt
-  (alcotest :with-test))
+  (alcotest :with-test)
+  (qcheck :with-test)
+  (qcheck-alcotest :with-test))
  (tags
   ("sparse" "matrices")))
 

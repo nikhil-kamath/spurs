@@ -42,6 +42,26 @@ let test_mult () =
   let expected = [| [| 14.0; 0.0 |]; [| 21.0; 32.0 |]; [| 0.0; 30.0 |] |] |> csr_from_dense in
   check csmat "" expected (mult a b)
 
+let test_add () =
+  let open Csmat in
+  let a = [| [| 1.; 0.; 2. |]; [| 0.; 3.; 0. |]; [| 4.; 0.; 5. |] |] |> csr_from_dense in
+  let b = [| [| 0.; 6.; 0. |]; [| 7.; 0.; 8. |]; [| 0.; 0.; 9. |] |] |> csr_from_dense in
+  let expected = [| [| 1.; 6.; 2. |]; [| 7.; 3.; 8. |]; [| 4.; 0.; 14. |] |] |> csr_from_dense in
+  check csmat "" expected (add a b)
+
+let test_add_2 () =
+  let open Csmat in
+  let a =
+    [| [| 1.; 0.; 2. |]; [| 0.; 3.; 0. |]; [| 4.; 0.; 5. |]; [| 4.; 0.; 5. |] |] |> csr_from_dense
+  in
+  let b =
+    [| [| -1.; 6.; 0. |]; [| 7.; 0.; 8. |]; [| 0.; 0.; 9. |]; [| 4.; 0.; 5. |] |] |> csc_from_dense
+  in
+  let expected =
+    [| [| 0.; 6.; 2. |]; [| 7.; 3.; 8. |]; [| 4.; 0.; 14. |]; [| 8.; 0.; 10. |] |] |> csc_from_dense
+  in
+  check csmat "" expected (add ~storage:CSC a b)
+
 let () =
   run "Spurs.Ops"
     [
@@ -53,5 +73,10 @@ let () =
           test_case "Dot product, mismatched lengths" `Quick test_v_dot_mismatch;
           test_case "Self dot product" `Quick test_dot_normalize;
         ] );
-      ("Matrix-Matrix operations", [ test_case "Multiply" `Quick test_mult ]);
+      ( "Matrix-Matrix operations",
+        [
+          test_case "Multiply" `Quick test_mult;
+          test_case "Add" `Quick test_add;
+          test_case "Add 2" `Quick test_add_2;
+        ] );
     ]

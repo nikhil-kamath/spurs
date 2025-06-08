@@ -218,6 +218,14 @@ val to_other_storage : 'a t -> 'a t
 val to_dense : float t -> float array array
 (** [to_dense m] converts m into a dense matrix. *)
 
+val append : 'a t -> 'a Csvec.t -> unit
+(** [append m v] appends [v] as a new outer dimension to [m], extending the size of the
+    outer dimension by one. This is adding a new row to CSR matrices, and a new column to
+    CSC matrices.
+
+    Raises an exception if the [v.dim] does not have the same size as the inner dimension
+    of [m]. *)
+
 val append_outer : ?epsilon:float -> float t -> float array -> unit
 (** [append_outer ~epsilon m v] appends [v] as a new outer dimension to [m], extending the
     size of the outer dimension by one. This is adding a new row to CSR matrices, and a

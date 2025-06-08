@@ -304,19 +304,20 @@ let ( .!!()<- ) m i v = set_nnz m i v
 let ( .@() ) m rc = get m rc
 let ( .@()<- ) m rc v = set m rc v |> Option.get (* Should this return the option? *)
 
-let append_outer ?(epsilon = 0.000001) (m : 'a t) (v : 'a array) =
-  if Array.length v <> inner_dims m then
+let append (m : 'a t) (v : 'a Csvec.t) =
+  if v.dim <> inner_dims m then
     raise (MatrixException "Trying to append improperly sized vector");
-  let nnz = ref (nnz m) in
-  Array.iteri
+  Csvec.iter
     (fun i x ->
-      if abs_float x >= epsilon then (
-        Dynarray.add_last m.indices i;
-        Dynarray.add_last m.data x;
-        incr nnz))
+      Dynarray.add_last m.indices i;
+      Dynarray.add_last m.data x)
     v;
-  Dynarray.add_last m.indptr !nnz;
+  Dynarray.add_last m.indptr (nnz m + Csvec.nnz v);
   match m.storage with CSR -> m.nrows <- m.nrows + 1 | CSC -> m.ncols <- m.ncols + 1
+
+let append_outer ?(epsilon = 0.000001) (m : 'a t) (v : 'a array) =
+  let v = Csvec.of_dense ~epsilon v in
+  append m v
 
 let insert_outer_inner m outer inner x =
   let open Dynarray in

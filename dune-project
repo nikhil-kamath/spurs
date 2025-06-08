@@ -1,7 +1,7 @@
 (lang dune 3.17)
 
 (name spurs)
-(version v0.1.0)
+(version v0.1.1)
 
 (generate_opam_files true)
 
@@ -18,7 +18,7 @@
 
 (package
  (name spurs)
- (version 0.1.0)
+ (version 0.1.1)
  (synopsis "A lightweight native sparse matrix library")
  (depends
   (ocaml (>= 5.3.0))

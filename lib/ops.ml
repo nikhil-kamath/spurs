@@ -21,10 +21,6 @@ let rec fft f f0 (ind_a : 'ind Dynarray.t) data_a ind_b data_b i imax j jmax (ac
         fft f f0 ind_a data_a ind_b data_b i imax (j + 1) jmax (f0 acc idx_b b)
       else fft f f0 ind_a data_a ind_b data_b (i + 1) imax (j + 1) jmax (f acc idx_a a b)
 
-(* do nothing on non-matching indices *)
-let fmfti (f : 'acc -> 'ind -> 'a -> 'a -> 'acc) = fft f (fun a _ _ -> a)
-let fmft (f : 'acc -> 'a -> 'a -> 'acc) = fft (fun a _ l r -> f a l r) (fun a _ _ -> a)
-
 (** {b fold non-matching, indexed} [fmz_v f f0 acc v1 v2] Folds left. It uses
     [f0 acc idx x] to update the accumulator if only a nonzero is found in one of the two
     vectors. On matching indices, it uses [f acc idx a b]. *)
@@ -44,9 +40,6 @@ let fmi_v f = fni_v f (fun a _ _ -> a)
     indices between [v1] and [v2] *)
 let fm_v f = fmi_v (fun acc _ a b -> f acc a b)
 
-(** Adds two sparse vectors, returning the result as a new vector.
-
-    Raises an exception if the vectors have different dimensions. *)
 let add_v ?(epsilon = 0.000001) (v1 : float Csvec.t) (v2 : float Csvec.t) =
   if v1.dim <> v2.dim then raise (OpException "adding two different-dimension vectors")
   else
@@ -67,14 +60,11 @@ let add_v ?(epsilon = 0.000001) (v1 : float Csvec.t) (v2 : float Csvec.t) =
       () v1 v2;
     Csvec.{ dim = v1.dim; indices; data }
 
-(** Calculates the dot-product of two sparse vectors. *)
 let dot_v (v1 : float Csvec.t) (v2 : float Csvec.t) =
   if v1.dim <> v2.dim then
     raise (OpException "dot-product of two different-dimension vectors")
   else fm_v (fun acc a b -> acc +. (a *. b)) 0. v1 v2
 
-(** Calculates the matrix product of two sparse matrices, ignoring elements less than
-    [epsilon] *)
 let mult ?(epsilon = 0.000001) ?(storage = Csmat.CSR) (m1 : float Csmat.t)
     (m2 : float Csmat.t) =
   (* ensure m1 is CSR and m2 is CSC *)
@@ -101,7 +91,6 @@ let mult ?(epsilon = 0.000001) ?(storage = Csmat.CSR) (m1 : float Csmat.t)
 
 let ( *@ ) = mult
 
-(** Calculates the sum of two sparse matrices, ignoring elements less than [epsilon] *)
 let add ?(epsilon = 0.000001) ?(storage = Csmat.CSR) (m1 : float Csmat.t)
     (m2 : float Csmat.t) =
   let open Csmat in
